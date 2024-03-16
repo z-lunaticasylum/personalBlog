@@ -36,8 +36,8 @@ export default withMermaid(
       ]
     },
     head: [
-      ['link', { rel: 'stylesheet', href: '/public/style/custom.css' }],
-      ['link', { rel: 'icon', href: '/public/assets/favicon.ico' }],
+      ['link', { rel: 'stylesheet', href: '/style/custom.css' }],
+      ['link', { rel: 'icon', href: '/assets/favicon.ico' }],
     ] 
   })
 )
