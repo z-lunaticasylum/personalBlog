@@ -3,7 +3,7 @@
 layout: home
 
 hero:
-  name: "小f博客"
+  name: "zasylum博客"
   text: "记录前端学习日常"
   tagline: For family
   actions:

@@ -5,7 +5,7 @@ import { withMermaid } from 'vitepress-plugin-mermaid'
 // https://vitepress.dev/reference/site-config
 export default withMermaid(
   defineConfig({
-    title: "小f的博客",
+    title: "zasylum博客",
     description: "记录前端学习日常",
     themeConfig: {
       // https://vitepress.dev/reference/default-theme-config
@@ -36,7 +36,8 @@ export default withMermaid(
       ]
     },
     head: [
-      ['link', { rel: 'stylesheet', href: '../style/custom.css' }]
+      ['link', { rel: 'stylesheet', href: '/style/custom.css' }],
+      ['link', { rel: 'icon', href: '/assets/favicon.ico' }],
     ] 
   })
 )
