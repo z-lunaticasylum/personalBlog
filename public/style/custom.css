@@ -3,14 +3,14 @@
   /* line-height: 0px !important; */
   margin: 0px;
 }
-.VPDoc[data-v-343c73d6] {
-  padding: 0px;
+.VPDoc {
+  padding: 0px !important;
 }
 
 /* 页面内容部分，更宽一些 */
-.VPDoc .aside[data-v-343c73d6] {
-  display: none;
+.VPDoc .aside {
+  display: none !important;
 }
-.VPDoc.has-aside .content-container[data-v-343c73d6] {
-  max-width: 1000px;
+.VPDoc.has-aside .content-container {
+  max-width: 1000px !important;
 }
