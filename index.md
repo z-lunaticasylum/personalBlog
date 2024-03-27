@@ -3,13 +3,13 @@
 layout: home
 
 hero:
-  name: "zasylum博客"
+  name: "jf博客"
   text: "记录前端学习日常"
   tagline: For family
   actions:
     - theme: brand
       text: 所有文章
-      link: /vueCore/vue2-core
+      link: /vueCore/vue2-core-1
     # - theme: brand
     #   text: API Examples
     #   link: /api-examples

@@ -1,3 +1,4 @@
+**前言：这一篇涉及到 Vue 的初始化过程、响应式原理、异步更新机制以及一些 API 的原理**
 ### 一、Vue 的初始化过程做了什么？(new Vue(options) 发生了什么？)
 ```mermaid
 flowchart TB
@@ -146,6 +147,38 @@ flowchart TB
         如果支持 Promise，优先使用 Promise，然后依次是 MutationObserver、setImmediate、最后是 setTimeout。
         因此是优先考虑微任务，宏任务次之。"]
 ```
+### 四、一些 API 的原理
+&nbsp;
+#### 1、set 的原理
+1. 为什么要有 set？
+> 原因是 Vue2 中不能监听到对象中新增属性的变化，以及通过索引给数组新增一个元素（yyx 的说法是处于性能的考虑，因为通过索引来去操作数组对于存储了大量数据的数组来说消耗性能太大），也不能监听其响应式。
+2. 用法：Vue.set(obj, key, value) 或者 Vue.set(array, index, value)
+3. 原理
+> * 首先是判断传入的对象或者数组是否存在，如果不存在，就报警告;
+> * 接着判断如果是数组，就调用数组的 slice 方法，进行数组的修改或者新增内容操作；这里调用的 slice 方法是已经被重写后的数组方法；
+> * 判断是对象，如果是已经在对象上存在的属性，修改值之后直接返回；
+> * 如果是对象新增的值，那么就对新增的值执行 defineReactive() 方法，也就是对新增的值进行响应式处理，然后调 dep.notify() 通知 watcher 进行更新。
+#### 2、css 中的 scoped 及 deep 样式穿透原理
+1. vue 中 css 的 scoped 原理，主要就是在 DOM 结构以及 css 选择器样式上加上唯一不重复的标记，如：[data-v-hash 值]，以达到样式的私有模块化目的。而如何加上  [data-v-hash 值]，是通过 postcss 中 vue 自行编写的插件实现的。
+2. postcss 是什么：
+> 是一个解析 css 并创建 ast 的解析器。可以基于 postcss 使用插件对 css 的 ast 进行处理，当处理完成后就可以输出到 css 文件了，而 postcss 本身是不对 css 做额外的特殊处理的。
+3. deep 样式穿透：
+> 当使用了 scoped 时，如果想修改当前文件下使用的组件中的标签元素样式时，如果直接选择到该标签并修改样式，是不能生效的，如下图：
+> ![](./image/image4.png)
+> **实际编译后的 css 代码选择器:**
+> ![](./image//image5.png)
+> **当使用了 deep 样式穿透之后,也就是将 data-v-hash 向上一级标签移动了:**
+> ![](./image/image6.png)
+> ![](./image/image7.png)
+> ![](./image/image8.png)
+4. 具体原理：通过在 postcss 中自行编写的插件实现（等待补充。。。）
+#### 3、keep-alive 原理
+1. keep-alive 是一个抽象组件，并不会渲染成一个真实的 DOM 元素节点；原因是在定义 keep-alive 组件时，会设置一个 abstract 属性为 true ，在之后调用 initLifecycle() 为父子组件建立关系时，判断到组件的 abstract 属性为 true 就会跳过该组件；
+2. 在 keep-alive 组件的 created 中，首先会创建一个 cache 对象，用来存储每一个缓存的组件 Vnode；以及一个 keys 数组，存储缓存组件 Vnode 的 key 值；这个 key 值是由组件的 id 值和 tag 标签名组成的；
+3. 其自定义了一个 render() 渲染函数，首先会先拿到 keep-alive 组件插槽的第一个包裹的内容，接着判断是否有传入白名单和黑名单，如果有，那么判断如果白名单中不含该组件名或者黑名单中包含该组件名，那么就直接返回组件的 Vnode，不进行缓存；
+4. 接着，就根据当前组件的 id 值和 tag 生成一个 key，根据这个 key 查看 cache 对象中是否已经缓存过当前组件，如果缓存过，那么就拿到缓存过的组件实例，同时更新 keys 数组中对应的 key 值位置；
+    * key 值更新具体做法是，先删除掉原有的 key 值所在位置，再将 key 值 push 进 keys 数组中；原因是，如果 keep-alive 设置了最大缓存组件值，即传入了 max 值，那么会采用 LRU 算法，即最近最少使用算法，当所存储的缓存组件达到了上限，那么就删除掉最不常用的缓存组件；
+5. 如果当前组件没有缓存过，就在 cache 对象中保存当前需要缓存的组件和对应的 key 值，接着判断是否达到了保存上限，如果是，根据 LRU 算法，删除掉 keys 数组中首位的 key 以及其在 cache 中保存的对应的缓存组件
 
 
 
