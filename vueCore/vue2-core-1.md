@@ -8,7 +8,8 @@ flowchart TB
         B(["Vue.prototype._init()"]) -->
         C["主要做了什么：
         一、给每一个组件实例创建一个唯一的 uid
-        二、合并组件的选项三、调用 initLifecycle 进行组件关系属性的初始化：$parent、$root、$children
+        二、合并组件的选项
+        三、调用 initLifecycle 进行组件关系属性的初始化：$parent、$root、$children
         四、调用 initEvents 进行自定义事件的初始化
         五、调用 initRender 进行插槽的初始化
         六、执行 beforeCreate 生命周期函数
@@ -19,13 +20,12 @@ flowchart TB
         十一、判断是否传入 el 属性，如果有，自动进行挂载；如果 new Vue 时不传 el属性，需要手动进行挂载
         "]
 ```
-1. 这里合并选项，就是将 new Vue 传入的对象中的自定义选项，跟 Vue 默认的选项进行合并，将合并后的所有选项挂在 vue 实例的 $options 属性上。Vue 默认的属性有：filters(过滤器)、directives(自定义指令)以及 Vue 内置的组件，如： keep-alive 、transition、TransitionGroup。而传入的自定义选项就多种多样了；比如说如下
+1. 第二点中的合并选项，就是将 new Vue 传入的对象中的自定义选项，跟 Vue 默认的选项进行合并，将合并后的所有选项挂在 vue 实例的 $options 属性上。Vue 默认的属性有：filters(过滤器)、directives(自定义指令)以及 Vue 内置的组件，如： keep-alive 、transition、TransitionGroup。而传入的自定义选项就多种多样了；比如说如下
 ![](./image/image1.png)
 ![](./image/image2.png)
 2. 在第十一点中，vue 的初始化走到最后就是进行挂载，挂载执行的是 vue 实例上的 $mount 方法；在 $mount 方法中又去返回执行 mountComponent() 方法的结果。
 
 ### 二、响应式原理
-&nbsp;
 #### 1、响应式处理的流程图(以 data 选项为例子)
 ```mermaid
 flowchart TB
@@ -107,7 +107,7 @@ flowchart TB
 2. watch 主要是用来实现当 data、computed、props 中的数据发生变化之后，需要执行的一些回调。本质也是通过实例化 watcher 实现。
 
 ### 三、异步更新
-&nbsp;
+
 #### 1、数据修改之后是如何进行更新操作的？
 ```mermaid
 flowchart TB
@@ -148,7 +148,7 @@ flowchart TB
         因此是优先考虑微任务，宏任务次之。"]
 ```
 ### 四、一些 API 的原理
-&nbsp;
+
 #### 1、set 的原理
 1. 为什么要有 set？
 > 原因是 Vue2 中不能监听到对象中新增属性的变化，以及通过索引给数组新增一个元素（yyx 的说法是处于性能的考虑，因为通过索引来去操作数组对于存储了大量数据的数组来说消耗性能太大），也不能监听其响应式。

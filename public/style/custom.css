@@ -12,5 +12,28 @@
   display: none !important;
 }
 .VPDoc.has-aside .content-container {
-  max-width: 1000px !important;
+  max-width: 900px !important;
+}
+
+/* 去掉 a 链接下划线 */
+.VPFooter a {
+  text-decoration-line: none !important;
+}
+
+/* 给标题加个 bottom 的 margin */
+.vp-doc h3 {
+  margin: 32px 0 10px;
+}
+.vp-doc h4 {
+  margin: 5px 0;
+}
+
+/* img 图片加个 margin */
+img {
+  margin: 10px auto;
+}
+
+/* svg 居中 */
+svg {
+  margin: 0 auto;
 }

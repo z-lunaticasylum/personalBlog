@@ -36,6 +36,7 @@ export default withMermaid(
           text: '计算机网络相关',
           items: [
             { text: 'TCP 相关', link: '/computer-nerwork/TCP.md' },
+            { text: 'HTTP 相关', link: '/computer-nerwork/HTTP.md' },
             { text: '输入 URL 后会发生什么', link: '/computer-nerwork/URL.md' }
           ]
         }

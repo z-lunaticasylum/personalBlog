@@ -1,5 +1,5 @@
 ### 一、响应式原理
-&nbsp;
+
 #### 1、reactive 原理
 1. 内部是返回一个 createReactiveObject() 方法；在这个方法内部会经过一系列的判断，比如：判断传进来的对象是否已经响应式处理过了；筛选出能够被代理的对象；判断在 proxyMap 这个 Map 中是否有缓存过的对象；最后通过筛选的对象进行 new Proxy()。
 2. 在 new Proxy() 中会传入 get、set 这两个主要的拦截处理函数；get 是调用 createGetter() 方法生成；set 是调用 createSetter() 方法生成。
@@ -22,7 +22,7 @@
     *   run() 会拿到负责组件挂载和更新的函数，并执行它，开始了组件的挂载/更新；同时会将一个全局的变量 activeEffect 赋值为当前的渲染 effect；
     *   接着会执行传入到 ReactiveEffect 类的 componentUpdateFn() 方法，进行组件的挂载，在这个方法中会执行 render 函数去生成 Vnode，在这个时候就会访问到响应式数据，触发了 get，进而触发依赖收集；而这里的依赖收集，就是收集当前正在被激活的 effect，就是 activeEffect，也就是当前的渲染 effect；等到响应式数据被修改时就会触发 set，执行 trigger()，去遍历 dep 中所有的 effect，触发他们的更新
 ### 二、初始化创建过程
-&nbsp;
+
 #### 1、调用 createApp(App).mount('#app') 发生了什么
 1. 首先 createApp 这个方法在 Vue3 源码中通过 createAppAPI() 方法生成，这个方法还接受了 render 函数作为参数；
 2. 在 createAppAPI() 这个方法中主要就是创建 app 对象，在这个对象上挂载了许多属性和方法；属性有 _uid、_component、_props、_container、_context、_instance；而方法中有一个主要的 mount() 方法，也就是进行挂载；
