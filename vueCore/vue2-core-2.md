@@ -17,6 +17,7 @@
 由 **createCompilerCreator()** 生成 createCompiler()；  
 在 createCompilerCreator() 函数中可以看到，compileToFunctions() 函数由 **createCompileToFunctionFn()** 函数生成；  
 所以重点关注的是 createCompileToFunctionFn() 函数，是如何生成 **compileToFunctions()**，进而生成 render 函数
+![](./image/image15.png)
   * 编译器的核心是一个 compile() 函数，通过将 template 字符串传入，然后生成可执行的 render 字符串；接着将字符串转成函数（就是用 new Function 做一个转换）
   * compile() 函数是核心，作用是生成 render 字符串；而 compile() 内部是去执行一个 baseCompile()，将 template 进行编译；
   ![](./image/image10.png)

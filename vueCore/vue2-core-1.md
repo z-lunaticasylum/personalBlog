@@ -14,7 +14,7 @@ flowchart TB
         五、调用 initRender 进行插槽的初始化
         六、执行 beforeCreate 生命周期函数
         七、调用 initInjections 进行 inject 选项的初始化
-        八、调用 initState 进行响应式数据的初始化，例如：props、methods、data、computed、watch
+        八、调用 initState 进行响应式数据的初始化，依次处理：props、methods、data、computed、watch
         九、调用 initProvide 进行 provide 选项的初始化
         十、执行 created 生命周期函数
         十一、判断是否传入 el 属性，如果有，自动进行挂载；如果 new Vue 时不传 el属性，需要手动进行挂载
@@ -23,7 +23,8 @@ flowchart TB
 1. 第二点中的合并选项，就是将 new Vue 传入的对象中的自定义选项，跟 Vue 默认的选项进行合并，将合并后的所有选项挂在 vue 实例的 $options 属性上。Vue 默认的属性有：filters(过滤器)、directives(自定义指令)以及 Vue 内置的组件，如： keep-alive 、transition、TransitionGroup。而传入的自定义选项就多种多样了；比如说如下
 ![](./image/image1.png)
 ![](./image/image2.png)
-2. 在第十一点中，vue 的初始化走到最后就是进行挂载，挂载执行的是 vue 实例上的 $mount 方法；在 $mount 方法中又去返回执行 mountComponent() 方法的结果。
+2. 第三点中的处理父子组件关系：当判断到当前组件是抽象组件，即是 `<keep-alive>` 组件时，会跳过对该组件的处理；`<keep-alive>` 是抽象组件，会设置 abstract 属性为 true。
+3. 在第十一点中，vue 的初始化走到最后就是进行挂载，挂载执行的是 vue 实例上的 $mount 方法；在 $mount 方法中又去返回执行 mountComponent() 方法的结果。
 
 ### 二、响应式原理
 #### 1、响应式处理的流程图(以 data 选项为例子)
@@ -38,10 +39,11 @@ flowchart TB
     D["主要做了什么：判重处理（不能跟 methods 和 props 重复）、
     将 data 中的数据代理到 vue 实例，这样就能通过 this.*** 访问到 data"]-->
     F["将整个的 data 对象传给 observe() 主要做了什么：
-    判断是否已经经过响应式处理；
-    没有的话，为每一个传到 observe() 的数据 new 一个 Observer 实例；
-    一个 data 实例化一个 Observer。
-    只对数组和对象类型才会 new 一个 Observer 实例"]-->
+    1、判断是否已经经过响应式处理，依据是判断是否含有 __ob__ 属性：
+    如果有，那么就已经经过了响应式处理，直接返回这个 ___ob__ 属性；
+    如果没有，那么为每一个传到 observe() 的数据 new 一个 Observer 实例；
+    2、一个 data 实例化一个 Observer。
+    3、只对数组和对象类型才会 new 一个 Observer 实例"]-->
     G[" Observer 类做了什么：
     一、给每一个传入 Observer 的值创建一个属性 __ob__，
     值是 Observer 本身，表示已经经过响应式处理；

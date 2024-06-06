@@ -1,6 +1,7 @@
 // import mermaid from 'mermaid'
 import { defineConfig } from 'vitepress'
 import { withMermaid } from 'vitepress-plugin-mermaid'
+import viteCompression from 'vite-plugin-compression'
 
 // https://vitepress.dev/reference/site-config
 export default withMermaid(
@@ -56,6 +57,11 @@ export default withMermaid(
     head: [
       ['link', { rel: 'stylesheet', href: '/style/custom.css' }],
       ['link', { rel: 'icon', href: '/assets/favicon.ico' }],
-    ] 
+    ],
+    vite: {
+      plugins: [
+        viteCompression()
+      ]
+    }
   })
 )

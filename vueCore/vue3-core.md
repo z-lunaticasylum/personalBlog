@@ -24,7 +24,31 @@
 ### 二、初始化创建过程
 
 #### 1、调用 createApp(App).mount('#app') 发生了什么
-1. 首先 createApp 这个方法在 Vue3 源码中通过 createAppAPI() 方法生成，这个方法还接受了 render 函数作为参数；
+1. 在 createApp() 方法实现中，会先执行 ensureRenderer() 这个函数，返回一个对象，这个对象中包含一个跟 createApp() 同名的方法，通过 createApp() 来创建 app 对象；而 createApp() 又是通过 createAppAPI() 方法生成，这个方法还接受了 render 函数作为参数；
+```javascript
+export const createApp = ((...args) => {
+    // ensureRenderer 方法返回的是一个对象，里面包含 crateApp() 方法；
+    // 而 createApp() 这个方法是通过 createAppAPI() 返回的
+    const app = ensureRenderer().createApp(...args)
+    if (__DEV__) {
+        // 检查是否是原生标签
+        injectNativeTagCheck(app)
+        // 检查是否是自定义标签
+        injectCompilerOptionsCheck(app)
+    }
+    // 对 app 中的 mount 作一个缓存
+    const { mount } = app
+
+  /**
+   * 定义 mount 挂载方法，重写 app.mount() 方法，目的是支持跨平台渲染；
+   * 实际用户调用的 mount 就是这个 mount 方法
+   * @param containerOrSelector 要挂载的节点
+   * @returns 
+   */
+    app.mount = (containerOrSelector: Element | ShadowRoot | string): any => {}
+})
+```
+* 这里跟 Vue2 源码一样，都对 mount() 方法进行了重写，原因是原有的 mount() 方法是通用的标准渲染方式，因为 Vue 设计的理念就是能够各平台通用，所以原有的 mount() 方法就是通用的渲染流程，不包含任何的平台逻辑和规范：也就是先创建 Vnode 再渲染 Vnode。而重写的 mount() 方法就是针对于 Web 平台的。当然，重写后的 mount() 方法也会调用原来的 mount() 方法。 
 2. 在 createAppAPI() 这个方法中主要就是创建 app 对象，在这个对象上挂载了许多属性和方法；属性有 _uid、_component、_props、_container、_context、_instance；而方法中有一个主要的 mount() 方法，也就是进行挂载；
 3. 在 mount() 中，首先会通过 createVNode() 方法创建 Vnode，接着就将 Vnode 传给 render()，进行渲染;
 4. 在 render() 中主要的，就是调用 patch() 进行；patch() 方法接受多个参数，主要的就是头两个，旧 Vnode 和新 Vnode；如果旧 Vnode 不存在，传了新 Vnode 说明就是初次渲染挂载；如果新旧 Vnode 都存在，说明是进行更新；

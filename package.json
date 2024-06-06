@@ -8,6 +8,7 @@
     "vitepress": "^1.0.0-rc.45"
   },
   "dependencies": {
+    "vite-plugin-compression": "^0.5.1",
     "vitepress-plugin-mermaid": "^2.0.16"
   }
 }
