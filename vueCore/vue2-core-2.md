@@ -55,6 +55,45 @@
 1. 静态标记的作用是什么？
 > 目的是性能优化
 2. 哪些节点会被标记成静态节点？哪些节点是动态节点？
+```javascript
+/**
+ * 判断传入的节点是否是静态节点
+ * @param node 传入的节点
+ * @returns 
+ * 会被静态标记为 true 的节点：
+ * 1、文本节点，没有动态插值表达式；
+ * 2、节点上没有 v-bind、v-for、v-if 等指令；
+ * 3、非组件节点；
+ * 4、不是 <slot></slot>、<component></component>
+ * 5、子节点也必须是静态节点
+ */
+function isStatic(node: ASTNode): boolean {
+  /**
+   * 这里的 node.type 是 vue 内部定义的：node.type 是2，说明是表达式，则是动态；
+   * node.type 是 3，说明是文本节点，则是静态
+   */
+  if (node.type === 2) {
+    // expression
+    // 表达式，{{ testData }}
+    return false
+  }
+  if (node.type === 3) {
+    // text
+    // 文本节点
+    return true
+  }
+  return !!(
+    node.pre ||
+    (!node.hasBindings && // no dynamic bindings  有动态绑定属性的，是动态节点
+      !node.if &&
+      !node.for && // not v-if or v-for or v-else  有 v-if、v-for、v-else 的节点，是动态节点
+      !isBuiltInTag(node.tag) && // not a built-in 内置节点，如：<slot></slot>、<component></component>，是动态节点
+      isPlatformReservedTag(node.tag) && // not a component   是组件，那么是动态节点
+      !isDirectChildOfTemplateFor(node) &&  // 父节点为含有 v-for 指令的 template 标签，是动态节点
+      Object.keys(node).every(isStaticKey))
+  )
+}
+```
 3. 静态标记的过程
 #### 6、从做完了静态标记的 ast 对象到生成最终的 render 函数
 
@@ -88,5 +127,5 @@
       * 首先是定义了四个指针，八个变量；四个指针分别是指向新旧 Vnode 数组的首尾；八个变量是除了四个指针之外，是指针对应的首尾的四个 Vnode；
       * 接着就是循环新旧 Vnode 数组，在循环中做了四个判断，分别是新旧 Vnode 数组的头尾节点对比，如果四个猜想判断命中了，那么就更新该 Vnode 以及移动（需要移动的话）；
       * 如果四个猜想没有命中，那么会根据旧节点数组中 Vnode 的 key 和对应的下标生成 map 结构对象，然后从新节点数组中剩下的没有遍历过的首个节点 Vnode，根据 key 找到 map 中的下标；也就是在旧节点数组中找到新节点的下标，如果找得到下标，就进行 patchNode() 更新，找不到的话说明是新增节点，直接 createElm() 创建新节点；还有一种情况是，找到了 key，但不是同一个节点，说明该节点 key 相同，但以及变了，也当作是新增节点；
-        * 一旦命中了四个猜想中的一个，就可以避免一次 while 循环，降低时间复杂度；
+        * 一旦命中了四个猜想中的一个，就可以避免一次循环去寻找当前的新节点对应在旧节点数组中的位置，降低时间复杂度；
       * 循环结束的条件就是新旧 Vnode 两个数组任一个遍历完了；如果新节点数组遍历完了，旧节点数组还有，那么说明旧节点数组中剩下的都是多余的，直接删除就可以了；如果旧节点数组遍历完了，新节点数组还有，那么说明新节点数组剩下的都是新增的，调用 createElem() 创建节点新增

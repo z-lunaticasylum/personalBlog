@@ -7,7 +7,7 @@ flowchart TB
         内部调用 this._init"]) -->
         B(["Vue.prototype._init()"]) -->
         C["主要做了什么：
-        一、给每一个组件实例创建一个唯一的 uid
+        一、给每一个组件实例创建一个唯一的 uid。初始的 Vue 根组件的 uid 是 0
         二、合并组件的选项
         三、调用 initLifecycle 进行组件关系属性的初始化：$parent、$root、$children
         四、调用 initEvents 进行自定义事件的初始化
@@ -47,7 +47,7 @@ flowchart TB
     G[" Observer 类做了什么：
     一、给每一个传入 Observer 的值创建一个属性 __ob__，
     值是 Observer 本身，表示已经经过响应式处理；
-    二、判断是对象还是数组；如果是数组，那么就会重写数组的七个方法，
+    二、判断是对象还是数组；如果是数组，那么就将重写后的七个数组方法放到数组的原型上，
     然后遍历数组中的每个元素做响应式处理，也就是对数组中的每个数据执行 observe() 方法；
     三、如果是对象，那么对对象的每一个 value 执行 defineReactive 方法"]-->
     H["defineReactive() 做了什么：
@@ -58,6 +58,30 @@ flowchart TB
     三、当数据发生修改时，会先对修改后的新值进行响应式处理，接着通知依赖去进行异步更新"]
 ```
 1. 将 data 代理到 vue 上是通过 Object.defineProperty 的方式，也就是将 data 中的每一个数据都放到 vue 实例上；
+```javascript
+const sharedPropertyDefinition = {
+  enumerable: true,
+  configurable: true,
+  get: noop,
+  set: noop
+}
+
+/**
+ * 将对象的 key 代理到 vue 实例上；所以才能通过 this.*** 访问到定义在 data/props 中的数据
+ * @param target vue 实例
+ * @param sourceKey 如果是 props 则传入 '_props'，如果是 data 则传入 '_data'
+ * @param key 要代理的 key
+ */
+function proxy(target: Object, sourceKey: string, key: string) {
+  sharedPropertyDefinition.get = function proxyGetter() {
+    return this[sourceKey][key]
+  }
+  sharedPropertyDefinition.set = function proxySetter(val) {
+    this[sourceKey][key] = val
+  }
+  Object.defineProperty(target, key, sharedPropertyDefinition)
+}
+```
 2. 依赖收集的过程：调用 dep.depend() 方法，将当前的 dep 对象添加到 watcher 实例的数组（这个数组是用来存放 dep 的）中；同时也将 watcher 实例添加到 dep 中，做了一个双向收集；
 * 我们知道 dep 收集 watcher 是为了进行通知更新，那 watcher 收集 dep 是为什么？
     >目的是为了能够进行依赖的解除。Watcher 类中有一个方法是 cleanupDeps，作用从 watcher 类的 deps 数组中取出当前不必要的被依赖的 dep，接着是清除掉 dep 对象中无用的 watcher 实例。
@@ -72,8 +96,85 @@ flowchart TB
 
 
 3. 当修改了值之后，会触发 Object.defineProperty 的 setter, 在 setter 中会通知依赖，调用 dep.notify() 方法，去遍历 dep 中收集到的所有 watcher 对象，依次去执行他们的 update 方法进行异步更新。
-4. 重写数组的七个方法，具体做法是创建一个空对象，然后将七个数组方法名作为键，将名为 mutator 的函数作为七个方法名的值。在 mutator 方法中会先执行原始的数组方法，并将结果保存；比如执行数组的 push 方法，将得到的结果最后返回。如果有新增数据，就对新增的数据进行响应式处理。最后调用 dep.notify() 通知更新。在 Observer 类中，判断数据类型是数组，就将这个包含七个方法的对象放在数组的原型（__proto__）上。
-5. Watcher 的类型：
+4. 重写数组的七个方法，具体做法是基于数组原型创建一个空对象，然后将七个数组方法名作为键，将名为 mutator 的函数作为七个方法名的值。在 mutator 方法中会先执行原始的数组方法，并将结果保存；比如执行数组的 push 方法，将得到的结果最后返回。如果有新增数据，就对新增的数据进行响应式处理。最后调用 dep.notify() 通知更新。在 Observer 类中，判断数据类型是数组，就将这个包含七个方法的对象放在数组的原型（__proto__）上。
+```javascript
+const arrayProto = Array.prototype  // 拿到 Array 的原型，是一个对象，里面包含着所有数组的方法
+const arrayMethods = Object.create(arrayProto) // 基于数组的原型创建一个空对象
+
+// 为什么是这个七个，原因是这七个方法会改变原数组，而其他数组方法都是会返回新数组
+const methodsToPatch = ['push','pop','shift','unshift','splice','sort','reverse']
+
+methodsToPatch.forEach(function (method) {
+  // cache original method
+  const original = arrayProto[method] // 缓存数组中的原始方法
+  /**
+   * 一开始 arrayMethods 是一个空对象，经过 def, 往里面添加键 为 method，值 为 mutator 函数的键值对
+   * 最后的 arrayMethods 结构是：
+   * arrayMethods = {
+   *  push: ƒ mutator()
+   *  pop: ƒ mutator()
+   *  shift: ƒ mutator()
+   *  unshift: ƒ mutator()
+   *  slice: ƒ mutator()
+   *  sort: ƒ mutator()
+   *  reverse: ƒ mutator()
+   * }
+   * 所以实际上 mutator 是对原有的数组方法的覆盖，当执行这七个方法时，实际上执行的是对应的 mutator 方法
+   */
+  def(arrayMethods, method, function mutator(...args) {
+    // 这里的 args 参数，就是数组新增的数据
+    const result = original.apply(this, args) // 调用原始的数组方法，将结果保存在 result 中
+    const ob = this.__ob__  // 获取数组的响应式对象
+    let inserted  // 数组新增元素
+    switch (method) {
+      case 'push':
+      case 'unshift':
+        inserted = args
+        break
+      case 'splice':
+        inserted = args.slice(2)
+        break
+    }
+    if (inserted) ob.observeArray(inserted) // 对数组新增元素进行响应式处理
+    // notify change
+    // 通知依赖更新
+    if (__DEV__) {
+      ob.dep.notify({
+        type: TriggerOpTypes.ARRAY_MUTATION,
+        target: this,
+        key: method
+      })
+    } else {
+      ob.dep.notify()
+    }
+    return result
+  })
+})
+
+```
+
+
+5. Observer 类中的 dep 和 defineReactive() 方法中的 dep 的区别
+###### ① Observer 中的 dep
+```javascript
+const obj = { a: 1 };
+const observer=new Observer(obj)；// 对象被观察，observer.dep 被初始化
+//如果直接用Vue.set(obj，‘b'，2)，就会触发 observer.dep 通知所有依赖
+Vue.set(obj，'b',2)
+```
+Observer 中的 dep 是针对整个对象的依赖通知，当使用 Vue.set() 给对象新增属性时，这时就会通过对象的 dep 通知依赖更新
+###### ② defineReactive 中的 dep
+```javascript
+const obj = { a: 1 };
+defineReactive(obj，‘a'，obj.a)；//属性α被定义为响应式，a 的 dep被初始化
+//当访问 obj.a 时，会收集依赖到 dep
+console.log(obj.a)；／/触发getter，依赖被收集
+//当修改obj.a时，会通过dep通知所有依赖
+obj.a = 2；//触发setter，依赖被通知更新
+```
+这里就是针对属性修改的依赖通知，当属性 a 改变时，就通过 defineReactive() 中给对象属性设置的 dep 去通知依赖更新
+
+6. Watcher 的类型：
  *   组件 watcher，
  *   computed 的实现也是基于 Watcher
  *   watch 的实现也是基于 Watcher
@@ -84,20 +185,20 @@ flowchart TB
     * computed 能实现缓存的原理：首先上面说到 computed 的本质是 watcher 对象，在实例化 watcher 对象时会传入一个 lazy 属性，值为 true。等到访问 computed ，对应的 watcher 去计算值的时候，会将 watcher 中的另一个名为 dirty 属性置为 false；这样当 computed 在下次再次访问时，判断到 dirty 属性为 false 时，就不会去计算值，而是直接返回值。等到 computed 依赖的值发生了变化，页面发生了更新，watcher 执行 update 方法时，会将 dirty 再次置为 true，等到再次访问 computed 时，就会去计算新值了。
     ``` javascript
     class Watcher {
-    lazy: boolean,
-    dirty: boolean,
-    value: any
+        lazy: boolean,
+        dirty: boolean,
+        value: any
 
-    evaluate() {
-        this.value = this.get()	// 计算值
-        this.dirty = false;
-    }
-
-    update() {
-        if(this.lazy) {
-        this.dirty = true;
+        evaluate() {
+            this.value = this.get()	// 计算值
+            this.dirty = false;
         }
-    }
+
+        update() {
+            if(this.lazy) {
+                this.dirty = true;
+            }
+        }
     }
 
     // 当访问到某个 computed 值时，会执行 createComputedGetter() 函数返回的 computedGetter
@@ -107,6 +208,19 @@ flowchart TB
     // 等到页面更新后，执行 watcher.update() 会将 dirty 属性再次置为 true
     ```
 2. watch 主要是用来实现当 data、computed、props 中的数据发生变化之后，需要执行的一些回调。本质也是通过实例化 watcher 实现。
+
+#### 3、props 和 data
+1. 在实现上，在处理 props 时，是通过遍历 props 对象之后，对每一个 props 调用 defineReactive(), 没有调用 observe(); 而对于 data, 在处理时则是传给了 observe(); 个人理解: props 是父组件传给子组件的数据，已经是响应式的了，没有必要再调用 observe() 来递归地处理。
+2. 这里又有一个问题，既然已经是响应式了，那么为什么还要调 defineReactive()? 个人理解：是为了将父组件和子组件对于 props 的依赖隔离开，因为当 pops 数据发生变化时，在子组件中也需要有依赖追踪的能力。虽然 props 的值来源于父组件，但父子组件是独立的。即使父组件的响应式系统已经对 props 的值建立了依赖关系，子组件也需要为 props 数据建立自己的依赖关系。
+
+#### 4、Observer Watcher Dep 这三个类的作用
+1. Observer: 对对象或者数组类型数据 new 一个 Observer，目的是对数组类型就重写数组上的七个方法以及对数组中的数据进行响应式处理；如果是对象那么就递归的对对象中的数据进行响应式处理
+2. Watcher: Watcher 主要有三种类型.
+* 一：是组件的渲染 Watcher 每一个组件，包括根组件在初始化渲染时都会 new 一个 Watcher
+* 二：是 Computed
+* 三：是 Watch
+3. Dep: 是一个依赖收集器，作用就是为响应式数据中的每一项数据收集有哪些 Watcher 使用到了该数据，收集Watcher, 并在数据变化时去通知到 Watcher 去执行更新
+
 
 ### 三、异步更新
 
@@ -178,8 +292,9 @@ flowchart TB
 1. keep-alive 是一个抽象组件，并不会渲染成一个真实的 DOM 元素节点；原因是在定义 keep-alive 组件时，会设置一个 abstract 属性为 true ，在之后调用 initLifecycle() 为父子组件建立关系时，判断到组件的 abstract 属性为 true 就会跳过该组件；
 2. 在 keep-alive 组件的 created 中，首先会创建一个 cache 对象，用来存储每一个缓存的组件 Vnode；以及一个 keys 数组，存储缓存组件 Vnode 的 key 值；这个 key 值是由组件的 id 值和 tag 标签名组成的；
 3. 其自定义了一个 render() 渲染函数，首先会先拿到 keep-alive 组件插槽的第一个包裹的内容，接着判断是否有传入白名单和黑名单，如果有，那么判断如果白名单中不含该组件名或者黑名单中包含该组件名，那么就直接返回组件的 Vnode，不进行缓存；
-4. 接着，就根据当前组件的 id 值和 tag 生成一个 key，根据这个 key 查看 cache 对象中是否已经缓存过当前组件，如果缓存过，那么就拿到缓存过的组件实例，同时更新 keys 数组中对应的 key 值位置；
-    * key 值更新具体做法是，先删除掉原有的 key 值所在位置，再将 key 值 push 进 keys 数组中；原因是，如果 keep-alive 设置了最大缓存组件值，即传入了 max 值，那么会采用 LRU 算法，即最近最少使用算法，当所存储的缓存组件达到了上限，那么就删除掉最不常用的缓存组件；
+4. 接着，就根据当前组件的 id 值和 tag 生成一个 key，根据这个 key 查看 cache 对象中是否已经缓存过当前组件，如果缓存过，那么就拿到缓存过的组件实例，同时更新 keys 数组中对应的 key 值位置，也就是将其 key 值放在数组的最后一位；
+    * key 值更新具体做法是，先删除掉原有的 key 值所在位置，再将 key 值 push 进 keys 数组中；原因是，如果 keep-alive 设置了最大缓存组件值，即传入了 max 值，那么会采用 LRU 算法，即最近最少使用算法，当所存储的缓存组件达到了上限，那么就删除掉最不常用的缓存组件；具体做法就是拿到保存 key 值数组的第一位，根据这个 key 去删掉保存缓存 Vnode 对象对应的 Vnode。
+    * 这个上限值是用户传入的，如果没有传，那么就没有上限。
 5. 如果当前组件没有缓存过，就在 cache 对象中保存当前需要缓存的组件和对应的 key 值，接着判断是否达到了保存上限，如果是，根据 LRU 算法，删除掉 keys 数组中首位的 key 以及其在 cache 中保存的对应的缓存组件
 
 

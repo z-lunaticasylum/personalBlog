@@ -5,9 +5,12 @@
     "docs:preview": "vitepress preview"
   },
   "devDependencies": {
+    "less": "^4.2.2",
     "vitepress": "^1.0.0-rc.45"
   },
   "dependencies": {
+    "ali-oss": "^6.22.0",
+    "axios": "^1.7.9",
     "vite-plugin-compression": "^0.5.1",
     "vitepress-plugin-mermaid": "^2.0.16"
   }

@@ -40,6 +40,12 @@ export default withMermaid(
             { text: 'HTTP 相关', link: '/computer-nerwork/HTTP.md' },
             { text: '输入 URL 后会发生什么', link: '/computer-nerwork/URL.md' }
           ]
+        },
+        {
+          text: '测试页面',
+          items: [
+            { text: '大文件上传', link: '/test/test' }
+          ]
         }
       ],
   
