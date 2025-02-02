@@ -20,6 +20,9 @@ import { onMounted, reactive, ref, unref } from "vue"
 import {http1} from "./api"
 import OSS from "ali-oss"
 import type { Checkpoint } from "ali-oss";
+// import VConsole from 'vconsole'
+
+// const vConsole = new VConsole()
 
 interface AccesskeyType {
   policy: string,
@@ -44,7 +47,7 @@ interface AMultipartFileOptions {
 }
 
 // 设定决定是直接上传还是分片上传的界限
-const partSizeLimit = 1024 * 1024 * 60;
+const partSizeLimit = 1024 * 1024 * 6;
 
 // 分片上传时最小分片
 const partSize = 1024 * 1024 * 4;
@@ -89,8 +92,10 @@ onMounted(() => {
   input.value!.addEventListener("change", async (e) => {
       // console.log(input.value?.files)
       // let file = input.value?.files![0];
+      console.log(input.value?.files?.length, "111")
       
       if(input.value?.files?.length) {
+        console.log(input.value)
         // 拿到要上传的文件
         let file: File = input.value.files![0];
         console.log(file)
@@ -103,6 +108,8 @@ onMounted(() => {
           fileSize: file.size,
           progress: fileProgress
         }
+
+        console.log(fileInfo)
 
         // 文件比较小时，选择直接上传
         if(file.size < partSizeLimit) {

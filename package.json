@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "docs:dev": "vitepress dev",
+    "docs:dev": "vitepress dev --host",
     "docs:build": "vitepress build",
     "docs:preview": "vitepress preview"
   },
@@ -11,6 +11,7 @@
   "dependencies": {
     "ali-oss": "^6.22.0",
     "axios": "^1.7.9",
+    "vconsole": "^3.15.1",
     "vite-plugin-compression": "^0.5.1",
     "vitepress-plugin-mermaid": "^2.0.16"
   }
