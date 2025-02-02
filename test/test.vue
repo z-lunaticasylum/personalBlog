@@ -233,7 +233,7 @@ onMounted(() => {
       height: 100%;
       content: 'loading...';
       text-align: left;
-      background: url('@/assets/loading.gif') no-repeat 5px center #EEE;
+      //background: url('@/assets/loading.gif') no-repeat 5px center #EEE;
       background-size: 15px 15px;
       color: #999;
   }
