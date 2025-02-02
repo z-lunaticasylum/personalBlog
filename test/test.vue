@@ -20,9 +20,9 @@ import { onMounted, reactive, ref, unref } from "vue"
 import {http1} from "./api"
 import OSS from "ali-oss"
 import type { Checkpoint } from "ali-oss";
-// import VConsole from 'vconsole'
+import VConsole from 'vconsole'
 
-// const vConsole = new VConsole()
+const vConsole = new VConsole()
 
 interface AccesskeyType {
   policy: string,
