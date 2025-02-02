@@ -47,7 +47,7 @@ interface AMultipartFileOptions {
 }
 
 // 设定决定是直接上传还是分片上传的界限
-const partSizeLimit = 1024 * 1024 * 6;
+const partSizeLimit = 1024 * 1024 * 2;
 
 // 分片上传时最小分片
 const partSize = 1024 * 1024 * 4;
