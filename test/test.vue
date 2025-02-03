@@ -21,8 +21,9 @@ import {http1} from "./api"
 import OSS from "ali-oss"
 import type { Checkpoint } from "ali-oss";
 if (typeof window !== "undefined") {
-  const VConsole = require("vconsole");
-  new VConsole();
+  import("vconsole").then((VConsole) => {
+    new VConsole.default(); // VConsole 作为默认导出
+  });
 }
 
 interface AccesskeyType {
