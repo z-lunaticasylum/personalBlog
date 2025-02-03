@@ -20,9 +20,10 @@ import { onMounted, reactive, ref, unref } from "vue"
 import {http1} from "./api"
 import OSS from "ali-oss"
 import type { Checkpoint } from "ali-oss";
-import VConsole from 'vconsole'
-
-const vConsole = new VConsole()
+if (typeof window !== "undefined") {
+  const VConsole = require("vconsole");
+  new VConsole();
+}
 
 interface AccesskeyType {
   policy: string,
@@ -82,10 +83,10 @@ const progress_value = ref<HTMLDivElement>()
 
 onMounted(() => {
   // 拿到上传文件需要的信息
-  http1.request<ResultAccessKey>({url: "/getAccesskey", method: "GET"}).then((res: ResultAccessKey) => {
-    accessKey = res.result;
-    // console.log(accessKey)
-  })
+  // http1.request<ResultAccessKey>({url: "/getAccesskey", method: "GET"}).then((res: ResultAccessKey) => {
+  //   accessKey = res.result;
+  //   console.log(accessKey)
+  // })
 
   // 上传文件方法
   // 不分片，直接传的时间是 最终花费时间: 14983ms => 15s
