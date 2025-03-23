@@ -11,6 +11,8 @@
       <div>花费时间: {{ time / 1000 }}秒</div>
 
       <button @click="value++">{{ value }}</button>
+
+      <video src="" width="640" height="360" controls></video>
   </div>
 </template>
 
@@ -63,7 +65,11 @@ let fileProgress = ref(0);
 // 花费时间
 let time = ref(0);
 
-let value = ref(0)
+let value = ref(0);
+
+// 视频地址
+// 视频地址由后端返回
+let videoUrl = ref("")
 
 
 const input = ref<HTMLInputElement>()

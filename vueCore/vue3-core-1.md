@@ -4,12 +4,138 @@
 1. 内部是返回一个 createReactiveObject() 方法；在这个方法内部会经过一系列的判断，比如：判断传进来的对象是否已经响应式处理过了；筛选出能够被代理的对象；判断在 proxyMap 这个 Map 中是否有缓存过的对象；最后通过筛选的对象进行 new Proxy()。
 2. 在 new Proxy() 中会传入 get、set 这两个主要的拦截处理函数；get 是调用 createGetter() 方法生成；set 是调用 createSetter() 方法生成。
 3. 在 get 中就是进行依赖的收集。跟 vue2 不同的是，vue3 中当 get 被触发时，会调用 track() 方法来进行依赖收集。首先是通过构造一个全局的 WeakMap 对象来进行数据的处理的；这个 WeakMap 对象为 targetMap。targetMap 的 key 是传入 reactive() 的对象，也就是需要响应式处理的对象(称为 obj)；value 是一个 map 对象，为 depsMap，以 obj 对象每一个属性为 key，而 value 是一个 set 集合结构，保存的是依赖对应属性的副作用（比如说 obj 中有一个属性为 count，有一个副作用函数将 obj.count++，那么 set 就是用来保存所有依赖 count 的副作用）。当 obj 的属性被访问的时候，就会收集到所有的依赖。
+```js
+get(target, key, receiver) {
+    ...
+    const res = Reflect.get(target, key, receiver);
+    // 调用 track 进行依赖收集
+    if (!isReadonly) {
+      track(target, TrackOpTypes.GET, key)
+    }
+    ...
+    return res
+}
+function track(target, type, key) {
+  if (shouldTrack && activeEffect) {
+    // 取出当前 target 对应的 map
+    let depsMap = targetMap.get(target)
+    // 不存在，创建一个新的
+    if (!depsMap) {
+      targetMap.set(target, (depsMap = new Map()))
+    }
+    // vue3.4 之后将 dep 也改成了 map 结构
+    let dep = depsMap.get(key)
+    if (!dep) {
+      depsMap.set(key, (dep = createDep(() => depsMap!.delete(key))))
+    }
+    // activeEffect 表示当前正在执行的 effect
+    trackEffect(activeEffect, dep)
+  }
+}
+function trackEffect(effect, dep, debuggerEventExtraInfo) {
+  /**
+   * 这一步的判断是看当前的 effect 是否被重复收集了;
+   * _trackId 表示 effect 中的副作用函数执行的次数，因为在执行 effect 中的副作用函数时，
+   * effect 的 _trackId 都会加一；这个操作是在访问响应式数据时就发生了，因为渲染 effect 在 new ReactiveEffect() 时，
+   * effect 中的 run() 就会执行一次，传给渲染 effect 的 componentUpdateFn 执行，effect 的 _trackId 加一
+   * 如果相等，说明这个 effect 在本轮的收集中已经被追踪了，不需要再次收集，直接跳过
+   */
+  if (dep.get(effect) !== effect._trackId) {
+    dep.set(effect, effect._trackId)
+    const oldDep = effect.deps[effect._depsLength]
+    if (oldDep !== dep) {
+      if (oldDep) {
+        cleanupDepEffect(oldDep, effect)
+      }
+      effect.deps[effect._depsLength++] = dep
+    } else {
+      effect._depsLength++
+    }
+    if (__DEV__) {
+      // eslint-disable-next-line no-restricted-syntax
+      effect.onTrack?.(extend({ effect }, debuggerEventExtraInfo!))
+    }
+  }
+}
+```
 ![](./image/image3.png)
-4. 当 obj 中的属性发生改变时，也就是触发到 set，那么会调用 trigger() 方法，去拿到被修改对象属性的 depsMap 的 value 值，也就是 set 对象，遍历执行收集到的副作用，完成更新。
+4. 上面的 targetMap 的结构是 vue3.4 前的，vue3.4 之后将 depsMap 这个 map 结构中的 value 也改成了 map 结构，不再是 set，同时在 effect 中引入了一个 _trackId，表示当前 effect 被调度收集的次数，也表示 effect 中的副作用函数被执行的次数。这个 _trackId 很重要，因为在进行依赖收集时，会判断当前要收集的 effect 即 activeEffect 是否已经在本轮已经被收集过了，判断的依据就是 effect 上的 _trackId。
+> 比如下面的例子，首先将标签的内容编译成 render 函数，然后执行 render 函数，第一次访问到 obj1.age，触发 age 的 getter，执行到 trackEffect，这时 age 对应的 dep 这个 map 结构，还没有存储有 effect，所以 dep.get(effect) 是 undefined。而此时的渲染 effect 的 _trackId 是 1，因此会进入到判断，将此时的渲染 effect 收集到 age 对应的 dep 结构中。
+
+> 等到第二次访问 obj1.age，还是走一遍上面的流程，但此时 age 对应的 dep 中已经收集有渲染 effect 了，所以此时的判断 dep.get(effect) !== effect._trackId 就为 true，就不会进入判断，所以就不会在本轮收集中重复收集 effect
+```js
+<div>{{obj1.age}}</div>
+<div>{{obj1.age}}</div>
+<div>{{obj1.name}}</div>
+
+let obj1 = reactive({
+    name: "aaa",
+    age: 18
+})
+
+let com = computed(() => {
+    testDataObj1.age + 1
+})
+
+```
+响应式数据对应的结构
+![](./image/five.png)
+5. 当 obj 中的属性发生改变时，也就是触发到 set，那么会调用 trigger() 方法，首先去拿到被修改属性的 dep 的 key 值，也就是被修改数据的对应的 effect；接着调用 triggerEffects，将这些对应的 effect 的 scheduler() 方法放进 queueEffectSchedulers 队列中，然后是依次执行 effect 的 scheduler 方法；而这个 scheduler 方法是在生成渲染 effect 时，传入的第三个参数，(如下面)即 () => queueJob(update)。执行 scheduler 方法就是去执行 queueJob(update)，也就是将 update 放进执行队列中；而 update 就是去重新执行 componentUpdateFn。
+
+在 queueJob 这个方法中，就是去异步执行队列中的副作用函数，将对应的函数传到 Promise.then().resolve() 中，放进微队列去执行。
+```js
+// 创建响应式 effect 用于渲染
+const effect = (instance.effect = new ReactiveEffect(
+    componentUpdateFn,
+    NOOP,
+    () => queueJob(update), // 调用 queueJob 将 update 放进更新队列
+    instance.scope, // track it in component's effect scope
+))
+```
 #### 2、ref 原理
 1. 因为 reactive 针对的是对象类型数据的响应式处理，而对于原始值，如 Number、undefine、String、Boolean、Symbol、BigInt、null，reactive 的实现本质 proxy 就不能处理了；所以针对原始值类型，提出 ref 来处理；
 2. 当使用 ref() 时，会调用 createRef() 创建一个 RefImpl 类的实例，所以经过 ref() 处理过得到的值本质上就是一个对象，是 RefImpl 类的实例对象；
 3. 而 RefImpl 类中定义了名为 value 的 get 和 set 的拦截操作；这也就是为什么使用 ref 定义的响应式数据需要 .value；假设 let a = ref(0) 当使用 a.value 时，就会触发 a 对象上的 get() ，首先是调用 trackEffects 进行依赖收集，然后就返回值；等到设置值时，就触发 set 调用 triggerEffects 去通知所有依赖进行修改.
+```js
+function ref(value?: unknown) {
+  return createRef(value, false)
+}
+function createRef(rawValue: unknown, shallow: boolean) {
+  if (isRef(rawValue)) {
+    return rawValue
+  }
+  return new RefImpl(rawValue, shallow)
+}
+class RefImpl<T> {
+  private _value: T
+  private _rawValue: T
+
+  public dep?: Dep = undefined
+  public readonly __v_isRef = true
+
+  constructor(
+    value: T,
+    public readonly __v_isShallow: boolean,
+  ) {
+    this._rawValue = __v_isShallow ? value : toRaw(value)
+    this._value = __v_isShallow ? value : toReactive(value)
+  }
+  // 获取当前值时，调用 trackRefValue 进行依赖收集
+  get value() {
+    trackRefValue(this)
+    return this._value
+  }
+  // 修改当前值时， 调用 triggerRefValue 去通知依赖更新
+  set value(newVal) {
+    if (hasChanged(newVal, this._rawValue)) {
+      const oldVal = this._rawValue
+      this._rawValue = newVal
+      this._value = toReactive(newVal)
+      triggerRefValue(this, DirtyLevels.Dirty, newVal, oldVal)
+    }
+  }
+}
+```
 #### 3、ReactiveEffect 类的作用
 1. ReactiveEffect 类在 Vue3 的响应式系统中是一个重要的类，可以理解成是 Vue2 中的 Watcher 类；把 ReactiveEffect 类的实例称为 effect;
 2. ReactiveEffect 类实例化主要是在三个地方，分别是：
@@ -48,7 +174,6 @@ export const createApp = ((...args) => {
     app.mount = (containerOrSelector: Element | ShadowRoot | string): any => {}
 })
 ```
-* 这里跟 Vue2 源码一样，都对 mount() 方法进行了重写，原因是原有的 mount() 方法是通用的标准渲染方式，因为 Vue 设计的理念就是能够各平台通用，所以原有的 mount() 方法就是通用的渲染流程，不包含任何的平台逻辑和规范：也就是先创建 Vnode 再渲染 Vnode。而重写的 mount() 方法就是针对于 Web 平台的。当然，重写后的 mount() 方法也会调用原来的 mount() 方法。 
 2. 在 createAppAPI() 这个方法中主要就是创建 app 对象，在这个对象上挂载了许多属性和方法；属性有 _uid、_component、_props、_container、_context、_instance；而方法中有一个主要的 mount() 方法，也就是在后续进行挂载时会被调用。
 ```javascript
 /**
@@ -163,6 +288,7 @@ mount(
 },
 ```
 > vue3 中重写 mount() 方法的原因，个人理解的原因是：
+> * 这里跟 Vue2 源码一样，原有的 mount() 方法是通用的标准渲染方式，因为 Vue 设计的理念就是能够各平台通用，所以原有的 mount() 方法就是通用的渲染流程，不包含任何的平台逻辑和规范：也就是先创建 Vnode 再渲染 Vnode。而重写的 mount() 方法就是针对于 Web 平台的。当然，重写后的 mount() 方法也会调用原来的 mount() 方法。 
 > * 职责分明、模块清晰；原有的 mount 方法负责将组件挂载到 DOM 容器中，处理组件的渲染和更新逻辑。在之前的一些额外的处理和检查，如容器标准化、模板处理和清空容器内容等，放在这里处理，更符合职责分明的原则。
 > * 便于维护，如果后续有其他的处理逻辑，可以直接在这里添加，不需要修改原有的 mount 方法。
 2. createVNode() 方法创建 vnode。
@@ -370,7 +496,7 @@ const patch = function() {
             }
             ```
             > * 还有一种情况是，经过两轮遍历之后，新旧 Vnode 数组都有剩余，那么对剩余新旧节点进行处理；
-            > 遵循的原则是，尽可能多地复用源节点，尽可能少地移动节点。
+            > 遵循的原则是，尽可能多地复用原节点，尽可能少地移动节点。
             
             > 这里举个例子：旧 VNode 是 a b [c d e] f g, 新 VNode 是 a b [e c d h] f g; 在经过上面地处理之后，头尾的 a b f g 已经被
             patch 了。对于中间部分的 c d e 需要被更新成 e c d h; 按照常规思路是 c 更新成 e; d 更新成 c; e 更新成 d; 然后新增 h, 总共需要四个步骤。
@@ -472,4 +598,3 @@ const patch = function() {
                 return result
             }
             ```
-            

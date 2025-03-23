@@ -21,7 +21,21 @@ export default withMermaid(
           items: [
             { text: 'Vue2 原理（一）', link: '/vueCore/vue2-core-1.md' },
             { text: 'Vue2 原理（二）', link: '/vueCore/vue2-core-2.md' },
-            { text: 'Vue3 原理', link: '/vueCore/vue3-core.md' },
+            { text: 'Vue3 原理（一）', link: '/vueCore/vue3-core-1.md',
+              collapsed: true,
+              items: [
+                { text: '响应式原理', link: '/vueCore/vue3-core-1.md#一、响应式原理' },
+                { text: '初始化创建过程', link: '/vueCore/vue3-core-1.md#二、初始化创建过程' },
+                { text: '调用 mount 进行挂载', link: '/vueCore/vue3-core-1.md#三、调用-mount-进行挂载' },
+              ]
+            },
+            { text: 'Vue3 原理（二）', link: '/vueCore/vue3-core-2.md',
+              // items: [
+              //   { text: '响应式原理', link: '/vueCore/vue3-core-1.md#一、响应式原理' },
+              //   { text: '初始化创建过程', link: '/vueCore/vue3-core-1.md#二、初始化创建过程' },
+              //   { text: '调用 mount 进行挂载', link: '/vueCore/vue3-core-1.md#三、调用-mount-进行挂载' },
+              // ]
+            },
             { text: 'Vue Router 原理', link: '/vueCore/vue-router-core.md' },
             { text: 'Vuex  原理', link: '/vueCore/vueX-core.md' },
           ]
@@ -30,7 +44,8 @@ export default withMermaid(
           text: 'Webpack 相关',
           items: [
             { text: 'webpack 的生命周期/执行流程', link: '/webpack/webpackLifecycle' },
-            { text: 'webpack 的热更新', link: '/webpack/webpackHMR' }
+            { text: 'webpack 的热更新', link: '/webpack/webpackHMR' },
+            { text: 'webpack5 搭建 vue3 项目', link: '/webpack/webpack5BuildVue3' },
           ]
         },
         {
@@ -42,10 +57,10 @@ export default withMermaid(
           ]
         },
         {
-          text: '测试页面',
-          items: [
-            { text: '大文件上传', link: '/test/test' }
-          ]
+          // text: '测试页面',
+          // items: [
+          //   { text: '大文件上传', link: '/test/test' }
+          // ]
         }
       ],
   

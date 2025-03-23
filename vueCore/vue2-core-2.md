@@ -98,16 +98,50 @@ function isStatic(node: ASTNode): boolean {
 #### 6、从做完了静态标记的 ast 对象到生成最终的 render 函数
 
 ### 二、挂载过程
-1. 挂载时是调用 vue 实例上的 $mount() 方法；而 $mount() 方法在实例上绑定了两个，第一个是在定义在 src\platforms\web\runtime\index.ts 中，内部直接是返回执行 mountComponent()；第二个则是定义在 src\platforms\web\runtime-with-compiler.ts 中，相当于是是对第一个的重写；目的是在真正挂载前做一个判断，也就是下面部分；而在重写 $mount 之前，用 mount 做了一个保存，在做完判断之后再进行执行。
+1. 挂载时是调用 vue 实例上的 $mount() 方法；而 $mount() 方法在实例上绑定了两次，第一个是在定义在 src\platforms\web\runtime\index.ts 中，内部直接是返回执行 mountComponent()；第二个则是定义在 src\platforms\web\runtime-with-compiler.ts 中，相当于是是对第一个的重写；目的是在真正挂载前做一个判断，也就是下面部分；而在重写 $mount 之前，用 mount 做了一个保存，在做完判断之后再进行执行。
 2. 从第一点中可以知道，在完成初始化之后会调用实例上的 $mount() 方法进行挂载，在挂载之前会先进行一个判断：
     * 一般在使用 Vue 的时候，会选择传入三个选项，分别是 render、template、el，分别是自定义的 render 函数、template 模板字符串和 el 挂载点；如果同时传入这三个选项，那么优先级是 render > template > el；
     * 如果有 render 函数，那么会跳过编译阶段，直接调用 $mount() 方法进行挂载；
     * 如果没有传入 render 函数，那么就接着判断是否有传入 template 选项，如果有就拿到 template 字符串模板去编译生成动态的 render 函数和静态的 render 函数；
     * 如果没有 template 选项，最后去拿到 el 选项，通过 el 选项拿到其绑定到的标签内容，去生成 render 函数；
 3. 经过上述的判断之后才会进行挂载；而 $mount() 内部去执行的是 mountComponent() 函数；
+```js
+Vue.prototype.$mount = function (
+  el?: string | Element,
+  hydrating?: boolean
+): Component {
+  el = el && inBrowser ? query(el) : undefined
+  return mountComponent(this, el, hydrating)
+}
+```
 4. 在 mountComponent() 中有一个重要的函数 updateComponent()，这个函数是进行组件更新的核心；这个函数就是去执行 vue 实例上的 _render() 方法和 _update() 方法进行页面的渲染和更新的；_render() 方法是负责执行 render 函数来生成 Vnode，将生成的 Vnode 传给 _update()；
 5. 同时在 mountComponent() 函数中还会去实例化一个 Watcher 对象，也就是说每一个组件都会对应一个 Watcher；在实例化 Watcher 时会将 updateComponent 函数传入到 Watcher 内部去执行，也就是执行 _update() 函数；
 > updateComponent() 函数传入到 Watcher 内部，会赋值给 watcher 的 getter；随后会调用 watcher 中的 get() 方法去执行 getter，也就是传进来的 updateComponent()
+```js
+function mountComponent(vm, el, hydrating) {
+  // 执行 beforeMount 生命周期函数
+  callHook(vm, 'beforeMount');
+
+  let updateComponent
+  updateComponent = () => {
+    vm._update(vm._render(), hydrating)
+  }
+  // new 一个 Wacther, 将 updateComponent 传进去
+  new Watcher(
+    vm,
+    updateComponent,
+    noop,
+    watcherOptions,
+    true /* isRenderWatcher */
+  )
+  // 执行 mounted 生命周期钩子
+  if (vm.$vnode == null) {
+    vm._isMounted = true
+    callHook(vm, 'mounted')
+  }
+  return vm
+}
+```
 ### 三、渲染、更新过程
 1. 当组件进行挂载的时候会 new 一个对应的渲染 Watcher，将 updateComponent() 传给 Watcher，会在其中被调用执行；而 updateComponent() 函数内就是去执行 vue 实例上的 _update() 方法来对传入的 Vnode 进行渲染更新；
 2. 在 _update() 中也会判断下是首次渲染还是进行更新（判断的依据就是当前的 vue 实例上是否存在 Vnode 如果存在，就说明是进行更新；如果不存在则是首次渲染）
@@ -126,6 +160,7 @@ function isStatic(node: ASTNode): boolean {
     * **diff 算法过程**：
       * 首先是定义了四个指针，八个变量；四个指针分别是指向新旧 Vnode 数组的首尾；八个变量是除了四个指针之外，是指针对应的首尾的四个 Vnode；
       * 接着就是循环新旧 Vnode 数组，在循环中做了四个判断，分别是新旧 Vnode 数组的头尾节点对比，如果四个猜想判断命中了，那么就更新该 Vnode 以及移动（需要移动的话）；
+        * 这里的四个判断分别是：新 Vnode 头和旧 Vnode 头(不需要移动)；新 Vnode 尾和旧 Vnode 尾(不需要移动)；新 Vnode 头和旧 Vnode 尾(需要移动)；新 Vnode 尾和旧 Vnode 尾(需要移动)
       * 如果四个猜想没有命中，那么会根据旧节点数组中 Vnode 的 key 和对应的下标生成 map 结构对象，然后从新节点数组中剩下的没有遍历过的首个节点 Vnode，根据 key 找到 map 中的下标；也就是在旧节点数组中找到新节点的下标，如果找得到下标，就进行 patchNode() 更新，找不到的话说明是新增节点，直接 createElm() 创建新节点；还有一种情况是，找到了 key，但不是同一个节点，说明该节点 key 相同，但以及变了，也当作是新增节点；
         * 一旦命中了四个猜想中的一个，就可以避免一次循环去寻找当前的新节点对应在旧节点数组中的位置，降低时间复杂度；
       * 循环结束的条件就是新旧 Vnode 两个数组任一个遍历完了；如果新节点数组遍历完了，旧节点数组还有，那么说明旧节点数组中剩下的都是多余的，直接删除就可以了；如果旧节点数组遍历完了，新节点数组还有，那么说明新节点数组剩下的都是新增的，调用 createElem() 创建节点新增
