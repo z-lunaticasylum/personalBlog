@@ -5,7 +5,24 @@
 ![](./image/image1.png)
 ![](./image/image2.png)
 2. 第三点中的处理父子组件关系：当判断到当前组件是抽象组件，即是 `<keep-alive>` 组件时，会跳过对该组件的处理；`<keep-alive>` 是抽象组件，会设置 abstract 属性为 true。
-3. 在第十一点中，vue 的初始化走到最后就是进行挂载，挂载执行的是 vue 实例上的 $mount 方法；在 $mount 方法中又去返回执行 mountComponent() 方法的结果。
+3. 第四点中的初始化自定义事件，事件包括有：
+  * 普通的自定义事件，比如父组件通过 @ 绑定在子组件上的
+  * 父组件监听子组件的生命周期钩子
+  ```js
+  // 父组件通过 @ 绑定在子组件上
+  <child-component @click="handleClick" @input="handleInput" />
+  // 事件的存储形式
+  vm._events = {
+    click: [handleClick],
+    input: [handleInput]
+  };
+
+  // 父组件监听子组件的生命周期
+  // 会将 vm._hasHookEvent 属性置为 true
+  <child-component @hook:mounted="onChildMounted" />
+  ```
+4. 在初始化 inject 和 provide 时，是先处理 inject 再处理 provide; 这里的原因，个人想法是，当前组件的 inject 用到的 provide 数据，是父组件的 provide, 而当前组件的 provide 是提供给下一个组件的 inject。如果先初始化 provide, 再初始化 inject, 可能会导致当前组件的 provide 数据覆盖父组件的 provide 数据，导致 inject 无法正确获取父组件的数据。
+5. 在第十一点中，vue 的初始化走到最后就是进行挂载，挂载执行的是 vue 实例上的 $mount 方法；在 $mount 方法中又去返回执行 mountComponent() 方法的结果。
 
 ### 二、响应式原理
 #### 1、响应式处理的流程图(以 data 选项为例子)
@@ -135,7 +152,7 @@ obj.a = 2；//触发setter，依赖被通知更新
 #### 2、computed 和 watch 的区别
 1. computed 是计算属性，通常是对 data 中或者 props 传过来的数据做进一步的处理；computed 具有缓存的效果，也就是说，当依赖的数据没有发生变化，多次调用 computed，computed 中的函数也只会在开头执行一次，不会多次执行。
     * computed 的执行过程是这样的：首先 computed 的实现本质是实例化一个 Watcher，然后通过设置 computed 的属性描述符，修改 get 选项，将其设置为一个 computedGetter() 函数，这个函数内容的主要就是去计算当前 watcher 对象的值，也就是是 computed 的值。等待访问到 computed 时，就会触发 get，来执行上面的操作。
-    * computed 能实现缓存的原理：首先上面说到 computed 的本质是 watcher 对象，在实例化 watcher 对象时会传入一个 lazy 属性，值为 true。等到访问 computed ，对应的 getter 函数(computedGetter)会执行, 该 computed 对应的 watcher 去计算值的时候，会先判断一个 dirty 值，如果为 true 那么就会进行计算，也就去执行 watcher.evaluate(), 获取 computed 的值，同时将 dirty 属性置为 false；这样当 computed 在下次再次访问时，判断到 dirty 属性为 false 时，就不会去计算值，而是直接返回值。等到 computed 依赖的值发生了变化，页面发生了更新，watcher 执行 update 方法时，会将 dirty 再次置为 true，等到再次访问 computed 时，就会去计算新值了。
+    * computed 能实现缓存的原理：首先上面说到 computed 的本质是 watcher 对象，在实例化 watcher 对象时会传入一个 lazy 属性，值为 true。等到访问 computed ，对应的 getter 函数(computedGetter)会执行, 该 computed 对应的 watcher 去计算值的时候，会先判断一个 dirty 值(一开始如果传入了 lazy 值为 true 那么 dirty 也被赋值为 true)，如果为 true 那么就会进行计算，也就去执行 watcher.evaluate(), 获取 computed 的值，同时将 dirty 属性置为 false；这样当 computed 在下次再次访问时，判断到 dirty 属性为 false 时，就不会去计算值，而是直接返回值。等到 computed 依赖的值发生了变化，页面发生了更新，watcher 执行 update 方法时，会将 dirty 再次置为 true，等到再次访问 computed 时，就会去计算新值了。
     ``` javascript
     // computed 实现的过程
     export function initState(vm) {
@@ -238,7 +255,7 @@ obj.a = 2；//触发setter，依赖被通知更新
 
 #### 1、set 的原理
 1. 为什么要有 set？
-> 原因是 Vue2 中不能监听到对象中新增属性的变化，以及通过索引给数组新增一个元素（yyx 的说法是处于性能的考虑，因为通过索引来去操作数组对于存储了大量数据的数组来说消耗性能太大），也不能监听其响应式。
+> 原因是 Vue2 中不能监听到对象中新增属性的变化，以及通过索引给数组新增、修改一个元素（其实通过 Object.defineproperty 是能够监听到以下标访问数组的 yyx 的说法是处于性能的考虑，因为通过索引来去操作数组对于存储了大量数据的数组来说消耗性能太大），也不能监听其响应式。
 2. 用法：Vue.set(obj, key, value) 或者 Vue.set(array, index, value)
 3. 原理
 > * 首先是判断传入的对象或者数组是否存在，如果不存在，就报警告;

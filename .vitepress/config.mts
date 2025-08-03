@@ -20,7 +20,16 @@ export default withMermaid(
           text: 'Vue 原理系列',
           items: [
             { text: 'Vue2 原理（一）', link: '/vueCore/vue2-core-1.md' },
-            { text: 'Vue2 原理（二）', link: '/vueCore/vue2-core-2.md' },
+            { text: 'Vue2 原理（二）', link: '/vueCore/vue2-core-2.md',
+              collapsed: true,
+              items: [
+                { text: '编译器——如何生成 render 函数', link: '/vueCore/vue2-core-2.md#一、编译器——如何生成render函数' },
+                { text: '挂载过程', link: '/vueCore/vue2-core-2.md#二、挂载过程' },
+                { text: '渲染、更新过程', link: '/vueCore/vue2-core-2.md#三、渲染、更新过程' },
+                { text: 'diff 算法过程', link: '/vueCore/vue2-core-2.md#四、diff算法过程' },
+              ]
+
+             },
             { text: 'Vue3 原理（一）', link: '/vueCore/vue3-core-1.md',
               collapsed: true,
               items: [
@@ -36,7 +45,11 @@ export default withMermaid(
               //   { text: '调用 mount 进行挂载', link: '/vueCore/vue3-core-1.md#三、调用-mount-进行挂载' },
               // ]
             },
-            { text: 'Vue Router 原理', link: '/vueCore/vue-router-core.md' },
+            {
+              text: 'Vue3 原理（三）',
+              link: '/vueCore/vue3-core-3.md',
+            },
+            { text: 'Vue Router(3.x) 原理', link: '/vueCore/vue-router-core.md' },
             { text: 'Vuex  原理', link: '/vueCore/vueX-core.md' },
           ]
         },
@@ -56,12 +69,12 @@ export default withMermaid(
             { text: '输入 URL 后会发生什么', link: '/computer-nerwork/URL.md' }
           ]
         },
-        {
-          // text: '测试页面',
-          // items: [
-          //   { text: '大文件上传', link: '/test/test' }
-          // ]
-        }
+        // {
+        //   text: '测试页面',
+        //   items: [
+        //     { text: '大文件上传', link: '/test/test' }
+        //   ]
+        // }
       ],
   
       socialLinks: [

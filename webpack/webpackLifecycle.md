@@ -1,7 +1,48 @@
 **前言：本篇浅谈下 webpack 的执行过程**
 1. 首先将配置文件中配置的选项和执行的 shell 命令中携带的参数进行合并，得到最终的选项参数；
 2. 将得到的参数，也就是整个的配置选项的对象传给 webpack() 函数，去执行内部有一个 create() 方法，得到一个 compiler 对象；是一个重要的对象，在 webpack 的整个生命周期中都存在；
-3. 而 compiler 对象是通过 Compiler 类 new 出来的；在 Compiler 类中含有许多钩子函数，这些钩子会在 webpack 执行过程中依次触发。而这些钩子是基于 tapable 库实现的；而 tapable 库的本质则是基于发布订阅模式，通过在一系列钩子中使用 tap() 注册回调，然后在指定的时刻通过 call() 执行回调；这样在 webpack 执行过程中会在特定时刻执行钩子函数，插件监听到对应钩子的执行去触发回调；
+3. 而 compiler 对象是通过 Compiler 类 new 出来的；在 Compiler 类中初始化了大量的钩子函数，这些钩子会在 webpack 执行过程中依次触发。
+```js
+class Compiler {
+  constructor() {
+    this.hooks = Object.freeze({
+			initialize: new SyncHook([]),
+			shouldEmit: new SyncBailHook(["compilation"]),
+			done: new AsyncSeriesHook(["stats"]),
+			afterDone: new SyncHook(["stats"]),
+			additionalPass: new AsyncSeriesHook([]),
+			beforeRun: new AsyncSeriesHook(["compiler"]),
+			run: new AsyncSeriesHook(["compiler"]),
+			emit: new AsyncSeriesHook(["compilation"]),
+			assetEmitted: new AsyncSeriesHook(["file", "info"]),
+			afterEmit: new AsyncSeriesHook(["compilation"]),
+			thisCompilation: new SyncHook(["compilation", "params"]),
+			compilation: new SyncHook(["compilation", "params"]),
+			normalModuleFactory: new SyncHook(["normalModuleFactory"]),
+			contextModuleFactory: new SyncHook(["contextModuleFactory"]),
+			beforeCompile: new AsyncSeriesHook(["params"]),
+			compile: new SyncHook(["params"]),
+			make: new AsyncParallelHook(["compilation"]),
+			finishMake: new AsyncSeriesHook(["compilation"]),
+			afterCompile: new AsyncSeriesHook(["compilation"]),
+			readRecords: new AsyncSeriesHook([]),
+			emitRecords: new AsyncSeriesHook([]),
+			watchRun: new AsyncSeriesHook(["compiler"]),
+			failed: new SyncHook(["error"]),
+			invalid: new SyncHook(["filename", "changeTime"]),
+			watchClose: new SyncHook([]),
+			shutdown: new AsyncSeriesHook([]),
+			infrastructureLog: new SyncBailHook(["origin", "type", "args"]),
+			environment: new SyncHook([]),
+			afterEnvironment: new SyncHook([]),
+			afterPlugins: new SyncHook(["compiler"]),
+			afterResolvers: new SyncHook(["compiler"]),
+			entryOption: new SyncBailHook(["context", "entry"])
+    })
+  }
+}
+```
+而这些钩子是基于 tapable 库实现的；而 tapable 库的本质则是基于发布订阅模式，通过在一系列钩子中使用 tap() 注册回调，然后在指定的时刻通过 call() 执行回调；这样在 webpack 执行过程中会在特定时刻执行钩子函数，插件监听到对应钩子的执行去触发回调；
 ```javascript
   // tapable 中一共提供了九种 hook
   // 这里以最基本的同步 hook 举例

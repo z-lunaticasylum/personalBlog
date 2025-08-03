@@ -1,6 +1,6 @@
 <template>
   <div>
-      <input type="file" class="upload_inp" ref="input"></input>
+      <input type="file" class="upload_inp" ref="input" multiple="true"></input>
       <button class="upload_button select" @click="uploadFile" :class="{'loading': isLoading}">点击上传文件</button>
       <p>当前进度: {{ fileProgress }}%</p>
       

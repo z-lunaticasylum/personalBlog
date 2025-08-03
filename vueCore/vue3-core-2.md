@@ -64,7 +64,7 @@ function setupComponent(instance, isSSR = false, optimized = false,) {
 function setupStatefulComponent(instance, isSSR) {
   /**
    * 获取组件的配置，其中包含 setup 函数
-   * 如果是 <script setup></script> 这样的语法，那么会通过 vite 或者其他的打包工具一开始就将其转换成 render 函数
+   * 如果是 <script setup></script> 这样的语法，那么会通过 vite 或者其他的打包工具一开始就将其转换成 setup 函数
    */
   const Component = instance.type as ComponentOptions
 
@@ -99,7 +99,7 @@ function setupStatefulComponent(instance, isSSR) {
 ```
 > 注意这里有个重要的点：在执行 setup 函数之前，会先暂停依赖的收集，即执行 pauseTracking(). 为什么要这么做呢？
 
-> 原因在于：setup 所在的组件有可能会在父组件更新的时候运行，如果在子组件的 setup 中可以收集依赖的话，那么父组件的渲染函数会被收集成依赖，当子组件的响应式对象发生改变时，可能会触发父组件的更新，这肯定是不行的。所以在执行 setup 前先暂停依赖收集，执行完之后，再恢复。
+> 原因在于：在执行 setup 函数时，就会访问 setup 内的数据，而响应式数据通过 track 和 trigger 管理，当访问到了就会触发 track 进行依赖收集。而在 setup 中，肯定会写上一些不属于当前组件的响应式数据，比如：props，或者其他全局状态，如果此时也收集将其追踪为依赖，那么后续更新会引起不必要的更新以及形成错误的依赖关系。所以在执行 setup 期间，暂停依赖的收集。
 4. 执行 handleSetupResult() 处理 setup 函数返回的结果
 ```js
 /**
@@ -140,7 +140,16 @@ function finishComponentSetup(instance, isSSR, skipOptions) {
      * 这里省略兼容性的代码处理
      */
 
-      // 将 template 模板字符串编译成 render 函数，然后保存在 Component.render 中
+      /**
+       * 将 template 模板字符串编译成 render 函数，然后保存在 Component.render 中；
+       * 不过，通过 webpack/vite 创建的工程化项目，不会执行这个方法，因为在一开始编译的时候，
+       * 就将 template 模板编译成 render 函数。下面这种情况才会执行 compile() 进行编译
+       * const App = {
+          template: '<div>{{ msg }}</div>',
+          data() { return { msg: 'Hi' } }
+         }
+         Vue.createApp(App).mount('#app')
+       */
       Component.render = compile(template, finalCompilerOptions)
 
       // 再将 render 函数保存在 instance.render 中
@@ -152,7 +161,7 @@ function finishComponentSetup(instance, isSSR, skipOptions) {
   }
 }
 ```
-6. 处理完 setup 函数之后，回到 mountComponent() 函数中，如果组件中没有 Suspense 和异步依赖，会执行 setupRenderEffect() 方法(回到上面的 mountComponnt 方法)
+6. 处理完 setup 函数之后，回到 mountComponent() 函数中，如果组件中没有 Suspense 和异步依赖，会执行 setupRenderEffect() 方法(回到上面的 mountComponent 方法)
 ```js
 const setupRenderEffect = (instance, initialVNode, container, anchor, parentSuspense, namespace: ElementNamespace, optimized,) => {
   // 组件渲染的核心函数，对于挂载和更新做不同的逻辑处理

@@ -62,7 +62,7 @@ function trackEffect(effect, dep, debuggerEventExtraInfo) {
 4. 上面的 targetMap 的结构是 vue3.4 前的，vue3.4 之后将 depsMap 这个 map 结构中的 value 也改成了 map 结构，不再是 set，同时在 effect 中引入了一个 _trackId，表示当前 effect 被调度收集的次数，也表示 effect 中的副作用函数被执行的次数。这个 _trackId 很重要，因为在进行依赖收集时，会判断当前要收集的 effect 即 activeEffect 是否已经在本轮已经被收集过了，判断的依据就是 effect 上的 _trackId。
 > 比如下面的例子，首先将标签的内容编译成 render 函数，然后执行 render 函数，第一次访问到 obj1.age，触发 age 的 getter，执行到 trackEffect，这时 age 对应的 dep 这个 map 结构，还没有存储有 effect，所以 dep.get(effect) 是 undefined。而此时的渲染 effect 的 _trackId 是 1，因此会进入到判断，将此时的渲染 effect 收集到 age 对应的 dep 结构中。
 
-> 等到第二次访问 obj1.age，还是走一遍上面的流程，但此时 age 对应的 dep 中已经收集有渲染 effect 了，所以此时的判断 dep.get(effect) !== effect._trackId 就为 true，就不会进入判断，所以就不会在本轮收集中重复收集 effect
+> 等到第二次访问 obj1.age，还是走一遍上面的流程，但此时 age 对应的 dep 中已经收集有渲染 effect 了，所以此时的判断 dep.get(effect) !== effect._trackId 就为 false(因为此时判断到两个 _trackId 是相等的)，就不会进入判断，所以就不会在本轮收集中重复收集 effect
 ```js
 <div>{{obj1.age}}</div>
 <div>{{obj1.age}}</div>
@@ -91,6 +91,48 @@ const effect = (instance.effect = new ReactiveEffect(
     () => queueJob(update), // 调用 queueJob 将 update 放进更新队列
     instance.scope, // track it in component's effect scope
 ))
+
+// 另外两种 effect 的初始化
+
+// computed 对应的 effect
+class ComputedRefImpl {
+  constructor() {
+    this.effect = new ReactiveEffect(
+      () => getter(this._value),
+      () =>
+        triggerRefValue(
+          this,
+          this.effect._dirtyLevel === DirtyLevels.MaybeDirty_ComputedSideEffect
+            ? DirtyLevels.MaybeDirty_ComputedSideEffect
+            : DirtyLevels.MaybeDirty,
+        ),
+    )
+    this.effect.computed = this
+    this.effect.active = this._cacheable = !isSSR
+    this[ReactiveFlags.IS_READONLY] = isReadonly
+  }
+}
+
+// watch 对应的 effect
+let scheduler: EffectScheduler
+if (flush === 'sync') {
+  // sync 同步执行，表示在进行任何更新之前执行
+  scheduler = job as any // the scheduler function gets called directly
+} else if (flush === 'post') {
+  // post 表示在 DOM 更新之后执行
+  scheduler = () => queuePostRenderEffect(job, instance && instance.suspense)
+} else {
+  // default: 'pre'
+  // 默认情况下：父组件更新之后，当前组件的 DOM 更新之前执行
+  job.pre = true
+  if (instance) job.id = instance.uid
+  scheduler = () => queueJob(job)
+}
+
+const effect = new ReactiveEffect(getter, NOOP, scheduler)
+
+// 三种 effect 在实例化时，传给 ReactiveEffect 的参数的情况：渲染 effect 跟 watch effect 传递的第二个参数是空函数；
+// computed effect 则是没有传递第三个参数
 ```
 #### 2、ref 原理
 1. 因为 reactive 针对的是对象类型数据的响应式处理，而对于原始值，如 Number、undefine、String、Boolean、Symbol、BigInt、null，reactive 的实现本质 proxy 就不能处理了；所以针对原始值类型，提出 ref 来处理；
@@ -293,7 +335,7 @@ mount(
 > * 便于维护，如果后续有其他的处理逻辑，可以直接在这里添加，不需要修改原有的 mount 方法。
 2. createVNode() 方法创建 vnode。
 ```javascript
-const cresteVNode = (__DEV__ ? createVNodeWithArgsTransform : _createVNode)
+const createVNode = (__DEV__ ? createVNodeWithArgsTransform : _createVNode)
 
 function _createVNode() {
     /** 省去对传入 createBaseVNode() 参数的处理*/
@@ -342,7 +384,17 @@ const vnode = {
     ctx: currentRenderingInstance,
 }
 ```
-3. 在 render() 中主要的，就是调用 patch() 进行；patch() 方法接受多个参数，主要的就是头两个，旧 Vnode 和新 Vnode；如果旧 Vnode 不存在，传了新 Vnode 说明就是初次渲染挂载；如果新旧 Vnode 都存在，说明是进行更新；
+3. 在调用 createVNode() 创建 Vnode 时传入的 rootComponent, 在工程化项目(通过 webpack 或 vite 处理)中，会被编译器进行处理(如果是 webpack 是通过 vue-loader; 如果是 vite 则是内部的插件)。因为在工程化的 vue 项目中，一般都是如下的方式使用:
+```javascript
+import App from './App.vue';
+const app = createApp(App);
+app.mount('#app');
+```
+那么这里传给 createApp() 的 App 组件，就会被编译器转化为下面的形式:
+![](./image/image17.png)
+也就是一个包含 render() 和 setup() 的对象，这个对象也就是 createVNode(rootComponent) 中的 rootComponent。在上面的 createBaseVNode() 中创建的 vnode 对象，会将 rootComponent 对象，赋值给 vnode 中的 type 属性，后续在 patch() 中进一步处理时，就会从 vnode 的 type 属性中取出 setup 函数和 render 函数去执行处理。
+
+4. 在 render() 中主要的，就是调用 patch() 进行；patch() 方法接受多个参数，主要的就是头两个，旧 Vnode 和新 Vnode；如果旧 Vnode 不存在，传了新 Vnode 说明就是初次渲染挂载；如果新旧 Vnode 都存在，说明是进行更新；
 ```javascript
 const render: RootRenderFunction = (vnode, container, namespace) => {
 // 如果 vnode 为 null，且 container._vnode 存在，则进行卸载操作
@@ -414,7 +466,7 @@ const patch = function() {
         if (shapeFlag & ShapeFlags.ELEMENT) { // 元素节点
           processElement()
         } else if (shapeFlag & ShapeFlags.COMPONENT) {
-          // 如果是首次渲染，根组件，则走这里
+          // 如果是首次渲染，也即根组件，或者是组件类型，比如子组件，则走这里
           processComponent()
         } else if (shapeFlag & ShapeFlags.TELEPORT) {
           ;(type as typeof TeleportImpl).process()
@@ -430,171 +482,176 @@ const patch = function() {
 * 如果是普通的 HTML 元素就调用 processElement() 进行挂载更新
     * 如果旧 Vnode 不存在，那么就直接进行挂载；
     * 如果新旧 Vnode 都存在，那么就调用 patchElement() 进行更新；在 patchElement() 中主要的部分就是调用 patchChildren() 通过 diff 算法进行比较处理更新；
-        * 如果新旧 Vnode 都存在，那么就调用 patchElement() 进行更新；在 patchElement() 中主要的部分就是调用 patchChildren() 通过 diff 算法进行比较处理更新；
-        * 如果含有 key 的话，就是进行全量 diff；调用 patchKeyedChildren()；分成了五步进行处理；
-            > 
-            ```javascript
-            /**
-             * c1: 旧节点 VNode 数组
-             * c2: 新节点 VNode 数组
-             */
-            const patchKeyedChildren = (c1, c2) {
-                let i = 0 // 新节点的起始索引
-                const l2 = c2.length  // 新节点的长度
-                let e1 = c1.length - 1 // prev ending index  旧节点的结束索引
-                let e2 = l2 - 1 // next ending index  新节点的结束索引
-                ...
-            }
-            ```
-            > * 首先分别从新旧 Vnode 数组的开头同时开始向后遍历，如果遇到同一个节点，就进行 patch()；如果没有遇到就跳过，继续判断下一对；
-            ```javascript
-            while (i <= e1 && i <= e2) {
-                const n1 = c1[i]
-                const n2 = c2[i]
-                if (isSameVNodeType(n1, n2)) {
-                    patch()
-                } else {
-                    break
-                }
-                i++
-            }
-            ```
-            > * 接着从新旧 Vnode 数组的结尾开始向前遍历，如果遇到同一个节点，就进行 patch()；如果没有遇到就跳过，继续判断下一对；
-            ```javascript
-            while (i <= e1 && i <= e2) {
-                const n1 = c1[e1]
-                const n2 = c2[e2]
-                if (isSameVNodeType(n1, n2)) {
-                    patch()
-                } else {
-                    break
-                }
-                e1--
-                e2--
-            }
-            ```
-            > * 经过上面两轮循环之后，进行判断，如果新节点数组还有剩余而旧节点数组已经遍历完了，说明新节点数组剩下的都是新增节点，进行新增；
-            ```javascript
-            if (i > e1) {
-                if (i <= e2) {
-                    const nextPos = e2 + 1
-                    const anchor = nextPos < l2 ? (c2[nextPos] as VNode).el : parentAnchor
-                    while (i <= e2) {
-                        patch()
-                        i++
-                    }
-                }
-            }
-            ```
-            > * 接着判断，经过两轮循环之后如果旧节点数组还有剩余而新节点数组已经遍历完了，说明旧节点数组剩下的都是没用的，直接删除；
-            ```javascript
-            else if (i > e2) {
-                while (i <= e1) {
-                    unmount(c1[i], parentComponent, parentSuspense, true)
-                    i++
-                }   
-            }
-            ```
-            > * 还有一种情况是，经过两轮遍历之后，新旧 Vnode 数组都有剩余，那么对剩余新旧节点进行处理；
-            > 遵循的原则是，尽可能多地复用原节点，尽可能少地移动节点。
-            
-            > 这里举个例子：旧 VNode 是 a b [c d e] f g, 新 VNode 是 a b [e c d h] f g; 在经过上面地处理之后，头尾的 a b f g 已经被
-            patch 了。对于中间部分的 c d e 需要被更新成 e c d h; 按照常规思路是 c 更新成 e; d 更新成 c; e 更新成 d; 然后新增 h, 总共需要四个步骤。
-
-            >但其实可以这样考虑, c 和 d 不用移动，将 e 移动到 c 前面，然后新增 h, 这样只需要三个步骤。这就是 vue3 中 diff 的优化思路：找出新节点数组中，在旧节点数组对应的索引构成的最长递增子序列。
-
-            > 在上面的例子中，由数组 [5, 3, 4, 0] 最终生成的最长递增子序列的数组是 [1, 2] 也就是在旧节点数组中剩余的未处理节点的第一个和第二个是不需要移动的。
-
-            > 生成最长递增子序列的算法思路是：贪心 + 二分查找 + 链表的回溯
-            ```javascript
-            /**
-            * 求得数组的最长递增子序列。主要思路是：二分查找 + 贪心 + 链表的回溯修正
-            * @param arr 传入的是 新节点数组 中 剩余未处理节点 在 旧节点数组 中的索引数组
-            * @returns 返回的是传入的索引数组的最大递增子序列对应数组的索引数组
+      * 如果含有 key 的话，就是进行全量 diff；调用 patchKeyedChildren()；分成了五步进行处理；
+          > 
+          ```javascript
+          /**
+           * c1: 旧节点 VNode 数组
+            * c2: 新节点 VNode 数组
             */
-            function getSequence(arr: number[]): number[] {
-                const p = arr.slice() // 构造反向链表，用于最后对生成的最长递增子序列进行修正
-                const result = [0]  // 存储的是最后要返回的结果数组，保存的是最长递增子序列在 arr 中的索引值
-                /**
-                * i: 遍历 arr 数组的索引值
-                * j: 每次 j 取到的值都是 result 的最后一位，也就是最长递增子序列最后一位数在 arr 中的索引值；
-                * 那么 result[j] 取到的就是索引值, arr[j] 取到的就是目前得到的递增子序列的最后一位数
-                * u: 二分查找的起始值
-                * v: 二分查找的末尾值
-                * c: 二分查找的中点值
-                */
-                let i, j, u, v, c
-                const len = arr.length
-                for (i = 0; i < len; i++) {
-                    const arrI = arr[i]
-                    // 这里为 0 就不做处理，因为如果是 0 ，说明 0 对应位置的节点是新节点，在旧节点数组中找不到
-                    if (arrI !== 0) {
-                        j = result[result.length - 1] // 取出 result 数组中的最后一位，也就是索引值
-                        // 如果 arrI 比结果序列中的最后一位大,说明找到了可以形成递增序列的数
-                        if (arr[j] < arrI) {
-                            // 这里将 p 中的 i 位置的内容指向了和 arrI 构成递增序列的它前面的数的索引值,也就是 j
-                            // [10, 30, 100, 200, 300, 50, 60] 这是传进来的 arr
-                            // 那么当遍历到 arrI = 30 时, arr[j] 是 10; 因此 p[i] = j 也就是 p[1] = 0
-                            // 这时的 p : [10, 0, 100, 200, 300, 50, 60]
-                            // arrI = 100, p = [10, 0, 1, 200, 300, 50, 60]
-                            // arrI = 200, p = [10, 0, 1, 2, 300, 50, 60]
-                            // arrI = 300, p = [10, 0, 1, 2, 3, 50, 60], result = [0, 1, 2, 3, 4]
-                            p[i] = j
-                            result.push(i)
-                            continue
-                        }
+          const patchKeyedChildren = (c1, c2) {
+              let i = 0 // 新节点的起始索引
+              const l2 = c2.length  // 新节点的长度
+              let e1 = c1.length - 1 // prev ending index  旧节点的结束索引
+              let e2 = l2 - 1 // next ending index  新节点的结束索引
+              ...
+          }
+          ```
+          > * 首先分别从新旧 Vnode 数组的开头同时开始向后遍历，如果遇到同一个节点，就进行 patch()；如果没有遇到就跳过，继续判断下一对；
+          ```javascript
+          while (i <= e1 && i <= e2) {
+              const n1 = c1[i]
+              const n2 = c2[i]
+              if (isSameVNodeType(n1, n2)) {
+                  patch()
+              } else {
+                  break
+              }
+              i++
+          }
+          ```
+          > * 接着从新旧 Vnode 数组的结尾开始向前遍历，如果遇到同一个节点，就进行 patch()；如果没有遇到就跳过，继续判断下一对；
+          ```javascript
+          while (i <= e1 && i <= e2) {
+              const n1 = c1[e1]
+              const n2 = c2[e2]
+              if (isSameVNodeType(n1, n2)) {
+                  patch()
+              } else {
+                  break
+              }
+              e1--
+              e2--
+          }
+          ```
+          > * 经过上面两轮循环之后，进行判断，如果新节点数组还有剩余而旧节点数组已经遍历完了，说明新节点数组剩下的都是新增节点，进行新增；
+          ```javascript
+          if (i > e1) {
+              if (i <= e2) {
+                  const nextPos = e2 + 1
+                  const anchor = nextPos < l2 ? (c2[nextPos] as VNode).el : parentAnchor
+                  while (i <= e2) {
+                      patch()
+                      i++
+                  }
+              }
+          }
+          ```
+          > * 接着判断，经过两轮循环之后如果旧节点数组还有剩余而新节点数组已经遍历完了，说明旧节点数组剩下的都是没用的，直接删除；
+          ```javascript
+          else if (i > e2) {
+              while (i <= e1) {
+                  unmount(c1[i], parentComponent, parentSuspense, true)
+                  i++
+              }   
+          }
+          ```
+          > * 还有一种情况是，经过两轮遍历之后，新旧 Vnode 数组都有剩余，那么对剩余新旧节点进行处理；
+          > 遵循的原则是，尽可能多地复用原节点，尽可能少地移动节点。
+          
+          > 这里举个例子：旧 VNode 是 a b [c d e] f g, 新 VNode 是 a b [e c d h] f g; 在经过上面地处理之后，头尾的 a b f g 已经被
+          patch 了。对于中间部分的 c d e 需要被更新成 e c d h; 按照常规思路是 c 更新成 e; d 更新成 c; e 更新成 d; 然后新增 h, 总共需要四个步骤。
 
-                        // 二分查找开始，寻找到在第 i 项之前的数形成的递增序列数组中的所有数中第一个比第 i 项大的数，来替换它
-                        /**
-                        * 为什么要二分查找？
-                        * 因为这里用到的思想是贪心，也就是说，要寻求最长递增子序列，那么就是要求序列中的每一位都要
-                        * 尽可能的小；当经过上面的判断，当前遍历到的 arr 数组中的第 i 项数不能接在之前构成的递增子
-                        * 序列后，所以就在之前构成的递增子序列中找到第一个比它大的数，并替换掉
-                        * 
-                        */
-                        u = 0 // 指向首位的指针
-                        v = result.length - 1 // 指向末位的指针
+          >但其实可以这样考虑, c 和 d 不用移动，将 e 移动到 c 前面，然后新增 h, 这样只需要两个步骤。这就是 vue3 中 diff 的优化思路：找出新节点数组中，在旧节点数组对应的索引构成的最长递增子序列。
 
-                        // 等到跳出 while 循环之后，得到的 u 值就是寻找到的递增序列中第一个比 arrI 
-                        // 大的数对应的在 arr 中的索引
-                        while (u < v) {
-                            c = (u + v) >> 1  // 取中点
-                            if (arr[result[c]] < arrI) {
-                                // arrI 比遍历到的数大，说明当前遍历到的数太小，左指针要在中点的左边
-                                u = c + 1
-                            } else {
-                                // arrI 比遍历到的数小，说明当前遍历到的数太大，右指针改成中点位置
-                                v = c
-                            }
-                        }
-                        // 经过上面的循环，找到递增序列中第一个比 arrI 大的数；
-                        // 因为 result 存储的就是递增序列在 arr 中的索引，所以 arr[result[x]] 取到的就是 arr 中的递增序列
+          > 在上面的例子中，由数组 [5, 3, 4, 0] 最终生成的最长递增子序列的数组是 [1, 2] 也就是在旧节点数组中剩余的未处理节点的第一个和第二个是不需要移动的。
 
-                        // 这时 arrI = 50, 找到的 u 是 arr 中 100 的索引值是 2; arr = [10, 30, 100, 200, 300, 50, 60]
-                        // 经过下面的 p[i] = result[u - 1], 即 p[5] = result[2 - 1]; result = [0, 1, 2, 3, 4]
+          > 生成最长递增子序列的算法思路是：贪心 + 二分查找 + 链表的回溯
+          ```javascript
+          /**
+          * 求得数组的最长递增子序列。主要思路是：贪心 + 二分查找 + 链表的回溯修正
+          * 1、贪心：比如说当前求得的递增子序列是 [2, 4, 7] 然后下一个遍历到的值是 6
+          * 6 比 7 要小，肯定不能直接放在序列后面，那么就考虑是以 [2, 4, 7] 为基础构成最长递增子序列的潜力大还是
+          * 以 [2, 4, 6] 为基础构成的最长递增子序列潜力大，那么肯定是 [2, 4, 6] 所以这就是贪心；
+          * 2、二分：当遍历到的数比当前子序列最后一位小，那么就在已经构成的子序列中寻找一个比当前数大的，去替换掉；而寻找的
+          * 思路，就是二分，因为子序列是有序的，在有序的数组中寻找某一个数，效率最高的是二分
+          * 3、链表的回溯修正：因为上面的替换，所以最终形成的子序列的位置，跟原来数组的位置肯定已经变了，所以需要进行修正
+          * @param arr 传入的是 新节点数组 中 剩余未处理节点 在 旧节点数组 中的索引数组
+          * @returns 返回的是传入的索引数组的最大递增子序列对应数组的索引数组
+          */
+          function getSequence(arr: number[]): number[] {
+              const p = arr.slice() // 构造反向链表，用于最后对生成的最长递增子序列进行修正
+              const result = [0]  // 存储的是最后要返回的结果数组，保存的是最长递增子序列在 arr 中的索引值
+              /**
+              * i: 遍历 arr 数组的索引值
+              * j: 每次 j 取到的值都是 result 的最后一位，也就是最长递增子序列最后一位数在 arr 中的索引值；
+              * 那么 result[j] 取到的就是索引值, arr[j] 取到的就是目前得到的递增子序列的最后一位数
+              * u: 二分查找的起始值
+              * v: 二分查找的末尾值
+              * c: 二分查找的中点值
+              */
+              let i, j, u, v, c
+              const len = arr.length
+              for (i = 0; i < len; i++) {
+                  const arrI = arr[i]
+                  // 这里为 0 就不做处理，因为如果是 0 ，说明 0 对应位置的节点是新节点，在旧节点数组中找不到
+                  if (arrI !== 0) {
+                      j = result[result.length - 1] // 取出 result 数组中的最后一位，也就是索引值
+                      // 如果 arrI 比结果序列中的最后一位大,说明找到了可以形成递增序列的数
+                      if (arr[j] < arrI) {
+                          // 这里将 p 中的 i 位置的内容指向了和 arrI 构成递增序列的它前面的数的索引值,也就是 j
+                          // [10, 30, 100, 200, 300, 50, 60] 这是传进来的 arr
+                          // 那么当遍历到 arrI = 30 时, arr[j] 是 10; 因此 p[i] = j 也就是 p[1] = 0
+                          // 这时的 p : [10, 0, 100, 200, 300, 50, 60]
+                          // arrI = 100, p = [10, 0, 1, 200, 300, 50, 60]
+                          // arrI = 200, p = [10, 0, 1, 2, 300, 50, 60]
+                          // arrI = 300, p = [10, 0, 1, 2, 3, 50, 60], result = [0, 1, 2, 3, 4]
+                          p[i] = j
+                          result.push(i)
+                          continue
+                      }
 
-                        // arrI = 50, p = [10, 0, 1, 2, 3, 1, 60], result = [0, 1, 5, 3, 4]
-                        // arrI = 60, p = [10, 0, 1, 2, 3, 1, 5],  result = [0, 1, 5, 6, 4]
-                        if (arrI < arr[result[u]]) {
-                            if (u > 0) {
-                                p[i] = result[u - 1]
-                            }
-                            // 找到了之后，因为贪心的思想，result 中存储的索引对应的数应该是尽可能的小，
-                            // 所以就将 result 中原来存储的索引替换成当前遍历到的 arr 中的数的索引值
-                            result[u] = i
-                        }
-                    }
-                }
+                      // 二分查找开始，寻找到在第 i 项之前的数形成的递增序列数组中的所有数中第一个比第 i 项大的数，来替换它
+                      /**
+                      * 为什么要二分查找？
+                      * 因为这里用到的思想是贪心，也就是说，要寻求最长递增子序列，那么就是要求序列中的每一位都要
+                      * 尽可能的小；当经过上面的判断，当前遍历到的 arr 数组中的第 i 项数不能接在之前构成的递增子
+                      * 序列后，所以就在之前构成的递增子序列中找到第一个比它大的数，并替换掉
+                      * 
+                      */
+                      u = 0 // 指向首位的指针
+                      v = result.length - 1 // 指向末位的指针
 
-                // 这一部分是回溯修正
-                // 因为根据上面的二分 + 贪心的处理，得到的 result 是 [0, 1, 5, 6, 4], 对应形成的最长递增序列
-                // 是 10 30 50 60 300 但是在数组中的顺序却是不正确的，因此需要修正
-                u = result.length
-                v = result[u - 1]
-                while (u-- > 0) {
-                    result[u] = v
-                    v = p[v]  // p 数组保存的是 
-                }
-                return result
-            }
-            ```
+                      // 等到跳出 while 循环之后，得到的 u 值就是寻找到的递增序列中第一个比 arrI 
+                      // 大的数对应的在 arr 中的索引
+                      while (u < v) {
+                          c = (u + v) >> 1  // 取中点
+                          if (arr[result[c]] < arrI) {
+                              // arrI 比遍历到的数大，说明当前遍历到的数太小，左指针要在中点的左边
+                              u = c + 1
+                          } else {
+                              // arrI 比遍历到的数小，说明当前遍历到的数太大，右指针改成中点位置
+                              v = c
+                          }
+                      }
+                      // 经过上面的循环，找到递增序列中第一个比 arrI 大的数；
+                      // 因为 result 存储的就是递增序列在 arr 中的索引，所以 arr[result[x]] 取到的就是 arr 中的递增序列
+
+                      // 这时 arrI = 50, 找到的 u 是 arr 中 100 的索引值是 2; arr = [10, 30, 100, 200, 300, 50, 60]
+                      // 经过下面的 p[i] = result[u - 1], 即 p[5] = result[2 - 1]; result = [0, 1, 2, 3, 4]
+
+                      // arrI = 50, p = [10, 0, 1, 2, 3, 1, 60], result = [0, 1, 5, 3, 4]
+                      // arrI = 60, p = [10, 0, 1, 2, 3, 1, 5],  result = [0, 1, 5, 6, 4]
+                      if (arrI < arr[result[u]]) {
+                          if (u > 0) {
+                              p[i] = result[u - 1]
+                          }
+                          // 找到了之后，因为贪心的思想，result 中存储的索引对应的数应该是尽可能的小，
+                          // 所以就将 result 中原来存储的索引替换成当前遍历到的 arr 中的数的索引值
+                          result[u] = i
+                      }
+                  }
+              }
+
+              // 这一部分是回溯修正
+              // 因为根据上面的二分 + 贪心的处理，得到的 result 是 [0, 1, 5, 6, 4], 对应形成的最长递增序列
+              // 是 10 30 50 60 300 但是在数组中的顺序却是不正确的，因此需要修正
+              u = result.length
+              v = result[u - 1]
+              while (u-- > 0) {
+                  result[u] = v
+                  v = p[v]  // p 数组保存的是 
+              }
+              return result
+          }
+          ```

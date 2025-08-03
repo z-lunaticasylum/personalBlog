@@ -159,6 +159,23 @@ init() {
         })
     })
 }
+
+// 在 History 类中 listen() 方法将传入的回调 cb 保存在 this.cb
+listen (cb: Function) {
+    this.cb = cb
+}
+
+
+// transitionTo 是路由要进行跳转时执行的方法
+// 在 init() 中执行 history.listen() 传入的回调，就传进了 confirmTransition() 中
+transitionTo() {
+    ...
+    this.confirmTransition(
+        route,
+        this.updateRoute(route),
+        ...
+    )
+}
 ```
 5. 最后就是在 Vue 根组件实例上挂载了 $router 和 $route 属性，以便能在每个组件中通过 this.*** 访问到这两个属性；以及全局注册 router-view 和 router-link 组件
 ```js
@@ -179,7 +196,7 @@ init() {
 ### 三、路由跳转
 1. 点击 router-link 进行跳转时，调用 router 实例对象上的 push 方法，进一步调用 history 对象上的 push；在 push 中调用路由跳转的核心方法: transitionTo；
 2. 在 transitionTo 中首先拿到要跳转的目标路由对象，接着调用 confirmTransition，在 confirmTransition 中首先判断如果是当前的路由跟要跳转的目标路由是否相同，如果相同，那么就不跳转；
-    > * 如果不相同，那么就拿到当前路由和要跳转目标路由的重复使用部分、失活部分以及要激活部分；比如说，当前路径是 /home/a/b 要跳转到 /home/c，那么重用的路由部分是 /home，失活部分是 /c，待激活部分是 /home/a；
+    > * 如果不相同，那么就拿到当前路由和要跳转目标路由的重复使用部分、失活部分以及要激活部分；比如说，当前路径是 /home/a/b 要跳转到 /home/c，那么重用的路由部分是 /home，失活部分是 /a/b，待激活部分是 /c；
     > * 接着通过 runQueue 方法，执行 queue 队列中的导航守卫函数，也就是进行导航守卫解析；完整的导航解析过程是这样的：
     ![](./image/three.png)
     > * 等到所有的路由导航守卫执行完之后，调用 updateRoute 方法，这个方法是拿到 history 对象上的 cb 函数并执行，也就是更新 route 对象，触发响应式数据对应的视图更新；

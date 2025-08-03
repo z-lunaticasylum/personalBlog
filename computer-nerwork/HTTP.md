@@ -34,6 +34,7 @@ Connection：连接方式，是否是长连接；例如：keep-alive
 > * cache-control：设置时间的格式是：Cache-Control: max-age=(seconds);设置缓存存储的最大周期，超过这个时间缓存被认为过期 (单位秒)。与Expires相反，时间是相对于请求的时间。    
 > * expires：设置时间的格式是：Expires: Wed, 21 Oct 2015 07:28:00 GMT；即在此时候之后，响应过期。
 > * 如果在Cache-Control响应头设置了 "max-age" 或者 "s-max-age" 指令，那么 Expires 头会被忽略。
+> * cache-control 值为 no-cache 和 no-store 的区别: no-cache 表示强制要求缓存把请求提交给服务器进行验证，也是开启协商缓存设置的值; no-store 表示不使用缓存
 #### 2、协商缓存
 1. 请求头部中的 If-Modified-Since 字段与响应头部中的 Last-Modified 字段实现
 > * If-Modified-Since：向服务器发送请求时，携带的最后一次服务器对资源的修改时间；or 浏览器缓存记录的该文件的最后服务器修改时间
