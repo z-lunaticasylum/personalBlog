@@ -181,6 +181,23 @@ function setupStatefulComponent(instance, isSSR) {
 > 注意这里有个重要的点：在执行 setup 函数之前，会先暂停依赖的收集，即执行 pauseTracking(). 为什么要这么做呢？
 
 > 原因在于：在执行 setup 函数时，就会访问 setup 内的数据，而响应式数据通过 track 和 trigger 管理，当访问到了就会触发 track 进行依赖收集。而在 setup 中，肯定会写上一些不属于当前组件的响应式数据，比如：props，或者其他全局状态，如果此时也收集将其追踪为依赖，那么后续更新会引起不必要的更新以及形成错误的依赖关系。所以在执行 setup 期间，暂停依赖的收集。
+```js
+/**
+ * 暂停收集依赖的逻辑：因为在 track() 中每次收集依赖的时候，都会判断 shouldTrack 是否为 true
+ * shouldTrack == true 才会进行依赖收集；trackStack 则是保留上一次的状态，方便恢复原本的状态
+ */
+// 暂停依赖收集
+export function pauseTracking() {
+  trackStack.push(shouldTrack)
+  shouldTrack = false
+}
+
+// 恢复上一次是否进行依赖收集的状态
+export function resetTracking() {
+  const last = trackStack.pop()
+  shouldTrack = last === undefined ? true : last
+}
+```
 4. 执行 handleSetupResult() 处理 setup 函数返回的结果
 ```js
 /**
