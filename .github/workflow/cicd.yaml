@@ -1,0 +1,34 @@
+name: Deploy VitePress
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 21
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build site
+        run: npm run docs:build
+
+      - name: Deploy dist to server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ 8.138.118.220 }}
+          username: ${{ root }}
+          key: ${{ MIIEogIBAAKCAQEAqQf+K5FZjeG+sP60TE40CixpD4WvFFLAYb3w7ejfp07saR3wcVN0IiousKS4MUezaYSEtIK0qg5CaCWZ+mhYFvVPrmG3anZZn3G8kaVbRbBI7goczMGjxvU65RbPRuI+G/glPIpAoV98poP8/XV4eXYyUEJy9A2j7PyCJW5pQfPVB+xg+0lDyYG4jCJiHpDfn2hucu4YRxzhhfXShBMffffHSjlpETuFOyX8zpyDHB2ia2XXJsr30Ol/Qcwme1RKzZnhlKL4Ei9KhkkM+TzUvNFYuUC0A3RkANXeF4lTBKhk5hKKuDE79x/X4yqpTp9UzV17BtsGMPBVQEs4s6UV/QIDAQABAoIBAFmpj730oBiPAuRId8NySFCNNj2xoCmbq8ktRDwvJ1RMnUM1SnIS3quwzIuPFNWvPxBd5zcJjmQWpEsyhvc5mmCzR80ssGqc1PWrE2f+2uegl08NtjE3FnVXaCJVcyYapO+ZNcdjXt07FZgOs4iPY5Sqig3g8bFb+vSfDTpl0xfULsc+w/G+A3HKQ23RvQiBT3VYxwcw7rdLUdj3OrtnQ4JxNIlOnmWSXSoXonYNRkZfsp3+Ccty0mQB9U7q8EDV9asqyOsBt1QClWs8ne/uXNPYpbcoZYqh5ZsfUhj9WtI6epu/26eJHm5KlY2J2T1c9aX1Tgo+Ahf4rwurjkAs4tECgYEA3ANjqBqOTu94elv+qa3tRj1yJq/rgf460/HtgoEiBuNr3c5wdESXdP9JnXGvx5OWhurtRZdtPMTz+gYOAEPzdKz7nYautsmUvogR1YozAeSo28Dag3CGHgQhCPTOcXp05t1qsD7rztGBhnXM/si4gtd8x99p4lliKkWuSRa2D+MCgYEAxK3Vm5DNap4Fq3fimiwjHQfESofkhzOhY6VYMuPK11EySSMoqQIgfmypw3D0468hNnEAeqHrMXAisiWeo0H3TrYDtfnnoXkxDiUF/MD7agZGZ1npYWsy9mPiEU++EEoJc+oA5w5IPVg3SHE6n2yNsb5rlW/BZ4vVZi6zfCX/aJ8CgYAzAsopYLbcEGPTot7BwqS/42FDHQiypBpJp88UshIMnNAWplWmb3zaUJJl4cUKtepxr6iBuSFHtLaIory+TQL2a2EPXfnGQaiuIGhaJWe8KaMJCIbhcMZ30SdDp1byMp1GJdIluQD9e8/XOBrme+1j0MiKov8uzuCWwn8tTQm7VwKBgHaVQQdsxQ2VfWGnBM9j8T/doPI3AQirjpEf7g+w3Gn6INGMC0XrbGANcEXQYzasLuA+PcWyvrWuIJ08pWtVqKCiiZY8uPXYtkUK+ZMtX+jLI8PIqDf+hFmeW32IkNYNbamf2y90owWpnJtm+auJrd0PLJqLKRcfbmkPm1QtLNONAoGAPr7F2x2/Q0dHzPuVvQrMu6QDpn87KA0a4Uyi0cBZb2B1mwD/fkjpJ/lEI444oAyrIJhJgFUBpfliShtd2DP2rzORhJ7lDXiw3ZYD9I+89PUNAp0QKyEMIyWpHAdPf+edbBhZ1GsUWtNLYCnkDWXgFVWbEHbTaxHP4h6SHIFcmXI= }}
+          source: ".vitepress/dist/*"
+          target: "/www/wwwroot/personalblogCICD"
