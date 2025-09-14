@@ -217,6 +217,16 @@ function handleSetupResult(instance, setupResult, isSSR) {
   // 结束组件的处理
   finishComponentSetup(instance, isSSR)
 }
+
+/**
+ * 因为 setup() 函数除了返回对象，还可以返回一个渲染函数，就像下面这样的形式(官方文档有写)
+ */
+export default {
+  setup() {
+    const count = ref(0)
+    return () => h('div', count.value)
+  }
+}
 ```
 5. 执行 finishComponentSetup()
 ```js

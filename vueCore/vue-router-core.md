@@ -133,9 +133,56 @@ function install(Vue) {
 }
 ```
 2. init() 方法主要做的事情，就是设置路径变化的监听器；比如是 hash 模式，那么就用 window.addEventListener 监听 hashchange 事件，在每一次 hash 变化时，拿到要跳转到的目标路径字符串，调用 transitionTo() 进行路由跳转；其实源码中做了一个判断，即使是采用 hash 模式，但是会判断当前环境是否支持 HTML5  的 history API，如果支持，就会转成监听 popstate 事件；不支持才会用 hashchange 事件进行兜底；
-    > 为什么会优先采用 history API 呢？   
-    因为 hash 原本是来做锚点页面定位的，用来做监听路径变化似乎违背了初衷，并且锚点功能也就不能使用了，如果要实现，那只能手动来实现了；    
-    并且 history 中的 pushState API 在进行路径跳转时，可以传递一些比较复杂的数据，等到触发 popState 事件触发时，可以拿到该数据
+```js
+class HashHistory extends History {
+    ...
+    setupListeners() {
+        const handleRoutingEvent = () => {
+            const current = this.current
+            if (!ensureSlash()) {
+                return
+            }
+            // 每次 hash 变化即路径变化时，都要去匹配一次路由
+            this.transitionTo(getHash(), route => {
+                if (supportsScroll) {
+                    handleScroll(this.router, route, current, true)
+                }
+                if (!supportsPushState) {
+                    replaceHash(route.fullPath)
+                }
+            })
+        }
+        // 判断是否支持 HTML5 中 history 相关 api 如果支持就优先监听 popstate 事件
+        const eventType = supportsPushState ? 'popstate' : 'hashchange'
+        window.addEventListener(
+            eventType,
+            handleRoutingEvent
+        )
+
+    }
+}
+
+function pushHash (path) {
+  // 如果支持 history 相关 api 优先使用 pushState
+  if (supportsPushState) {
+    pushState(getUrl(path))
+  } else {
+    window.location.hash = path
+  }
+}
+
+function replaceHash (path) {
+  // 如果支持 history 相关 api 优先使用 replaceState
+  if (supportsPushState) {
+    replaceState(getUrl(path))
+  } else {
+    window.location.replace(getUrl(path))
+  }
+}
+```
+> 为什么会优先采用 history API 呢？   
+因为 hash 原本是来做锚点页面定位的，用来做监听路径变化似乎违背了初衷，并且锚点功能也就不能使用了，如果要实现，那只能手动来实现了；    
+并且 history 中的 pushState API 在进行路径跳转时，可以传递一些比较复杂的数据，等到触发 popState 事件触发时，可以拿到该数据
 3. 接着在 Vue 根组件对象上通过 Vue.defineReactive 添加一个 _route 响应式属性，对应的值是当前的路由对象，等到路由跳转时，也会改变这个 _route 属性的值，由于是响应式数据，视图也能得到更新；
 ```js
 function install(Vue) {
