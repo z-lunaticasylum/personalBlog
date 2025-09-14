@@ -173,7 +173,7 @@ function pushHash (path) {
 
 function replaceHash (path) {
   // 如果支持 history 相关 api 优先使用 replaceState
-  console.log("1 ")
+  console.log("1222")
   if (supportsPushState) {
     replaceState(getUrl(path))
   } else {
