@@ -1,7 +1,7 @@
 **前言：这一篇涉及到 Vue 的初始化过程、响应式原理、异步更新机制以及一些 API 的原理**
 ### 一、Vue 的初始化过程做了什么？(new Vue(options) 发生了什么？)
 ![](./image/one.png)
-1. 第二点中的合并选项，就是将 new Vue 传入的对象中的自定义选项，跟 Vue 默认的选项进行合并，将合并后的所有选项挂在 vue 实例的 $options 属性上。Vue 默认的属性有：filters(过滤器)、directives(自定义指令)以及 Vue 内置的组件，如： keep-alive 、transition、TransitionGroup。而传入的自定义选项就多种多样了；比如说如下-------
+1. 第二点中的合并选项，就是将 new Vue 传入的对象中的自定义选项，跟 Vue 默认的选项进行合并，将合并后的所有选项挂在 vue 实例的 $options 属性上。Vue 默认的属性有：filters(过滤器)、directives(自定义指令)以及 Vue 内置的组件，如： keep-alive 、transition、TransitionGroup。而传入的自定义选项就多种多样了；比如说如下
 ![](./image/image1.png)
 ![](./image/image2.png)
 2. 第三点中的处理父子组件关系：当判断到当前组件是抽象组件，即是 `<keep-alive>` 组件时，会跳过对该组件的处理；`<keep-alive>` 是抽象组件，会设置 abstract 属性为 true。
