@@ -32,3 +32,6 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: ".vitepress/dist/*"
           target: "/www/wwwroot/personalblogCICD"
+        env:
+          LANG: C.UTF-8
+          LC_ALL: C.UTF-8
