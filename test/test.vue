@@ -139,10 +139,10 @@ onMounted(() => {
 
           // 文件较大，使用分片上传
           let ossClient = new OSS({
-            accessKeyId: "LTAI5tKT5FG1g4KTBMUniEFQ",
-            accessKeySecret: "tDUhfxa9xzNbjFWxF8M6CmcDOYGwk7",
-            bucket: "upload-test1-oss",
-            region: 'oss-cn-beijing'
+            accessKeyId: import.meta.env.VITE_OSS_ACCESS_KEY_ID,
+            accessKeySecret: import.meta.env.VITE_OSS_ACCESS_KEY_SECRET,
+            bucket: import.meta.env.VITE_OSS_BUCKET,
+            region: import.meta.env.VITE_OSS_REGION
           })
 
           console.log(saveFileId)
